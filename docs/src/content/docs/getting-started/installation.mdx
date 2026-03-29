@@ -1,0 +1,69 @@
+---
+title: Installation
+description: How to install electron-messageport-trpc and its peer dependencies
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+## Prerequisites
+
+- **Node.js** >= 18
+- **Electron** >= 22
+- **tRPC v11** (`@trpc/server` and `@trpc/client`)
+
+## Install the Package
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npm install electron-messageport-trpc @trpc/server@^11 @trpc/client@^11
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add electron-messageport-trpc @trpc/server@^11 @trpc/client@^11
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn add electron-messageport-trpc @trpc/server@^11 @trpc/client@^11
+    ```
+  </TabItem>
+</Tabs>
+
+## Package Exports
+
+The library ships with four entry points, each targeting a specific Electron process:
+
+| Import path | Process | Purpose |
+|---|---|---|
+| `electron-messageport-trpc/main` | Main | Port broker and request handler |
+| `electron-messageport-trpc/preload` | Preload | Expose port receiver to renderer |
+| `electron-messageport-trpc/renderer` | Renderer | tRPC link and port getter |
+| `electron-messageport-trpc/utility` | Utility | Handler for utility processes (planned) |
+
+<Aside type="caution">
+Make sure your bundler configuration resolves these entry points correctly. If you use Electron Forge or electron-vite, the default configuration should work out of the box.
+</Aside>
+
+## TypeScript Setup
+
+The package includes TypeScript declarations. No additional `@types` packages are needed.
+
+For full type inference on your tRPC router, export the router type from your main process code and import it in your renderer:
+
+```typescript
+// main/router.ts
+import { initTRPC } from '@trpc/server';
+
+const t = initTRPC.create();
+export const appRouter = t.router({
+  // ... your procedures
+});
+
+export type AppRouter = typeof appRouter;
+```
+
+## Next Steps
+
+Head to the [Quick Start](/getting-started/quick-start/) guide to wire everything together.

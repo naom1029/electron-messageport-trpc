@@ -1,0 +1,112 @@
+---
+title: Comparison with ipcMain/ipcRenderer
+description: Why MessagePort-based tRPC is a better approach for Electron IPC
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This page compares the traditional `ipcMain`/`ipcRenderer` approach with `electron-messageport-trpc`.
+
+## Traditional ipcMain/ipcRenderer
+
+```typescript
+// main process
+ipcMain.handle('greet', async (_event, name: string) => {
+  return `Hello, ${name}!`;
+});
+
+// renderer process (via preload)
+const result = await ipcRenderer.invoke('greet', 'World');
+// result is string, but TypeScript doesn't know that
+```
+
+### Problems
+
+1. **No type safety** -- channel names are strings; input and output types are `unknown`
+2. **Star topology** -- all messages route through the main process
+3. **JSON serialization** -- `ipcRenderer.invoke` uses JSON internally, losing `Date`, `Map`, `Set`, `ArrayBuffer` types
+4. **Manual subscription management** -- you have to wire up `ipcMain.on` / `webContents.send` yourself
+5. **No schema validation** -- invalid inputs are only caught at runtime (if at all)
+
+## electron-messageport-trpc
+
+```typescript
+// main process
+const t = initTRPC.create();
+const appRouter = t.router({
+  greet: t.procedure
+    .input(z.object({ name: z.string() }))
+    .query(({ input }) => `Hello, ${input.name}!`),
+});
+
+// renderer process
+const trpc = createTRPCClient<AppRouter>({
+  links: [portLink({ port: getPort() })],
+});
+
+const result = await trpc.greet.query({ name: 'World' });
+// result is fully typed as string
+```
+
+### Advantages
+
+1. **End-to-end type safety** -- TypeScript validates inputs and outputs at compile time
+2. **Flexible topology** -- MessagePort enables direct renderer-to-renderer and main-to-utility communication
+3. **Structured Clone** -- native transfer of `Date`, `Map`, `Set`, `ArrayBuffer`, `Error`, and more
+4. **Built-in subscriptions** -- tRPC v11 async iterables work natively
+5. **Schema validation** -- use Zod (or any validator) for runtime input validation
+
+## Feature Comparison
+
+| Feature | ipcMain/ipcRenderer | electron-messageport-trpc |
+|---|---|---|
+| Type safety | None | Full end-to-end |
+| Input validation | Manual | Zod / any tRPC validator |
+| Serialization | JSON.stringify | Structured Clone |
+| Topology | Star (main only) | Flexible (MessagePort) |
+| Subscriptions | Manual event wiring | tRPC subscriptions |
+| Error handling | Manual | tRPC error shapes |
+| Middleware | None | tRPC middleware chain |
+| Batching | Manual | Possible via tRPC links |
+| Context / Auth | Manual | `createContext` option |
+
+## Serialization Comparison
+
+```typescript
+// With ipcMain (JSON serialization)
+ipcMain.handle('getData', () => {
+  return {
+    date: new Date(),      // Becomes string "2024-01-01T00:00:00.000Z"
+    map: new Map([['a', 1]]), // Becomes {}
+    set: new Set([1, 2, 3]),  // Becomes {}
+    buffer: new ArrayBuffer(8), // Becomes {}
+  };
+});
+
+// With electron-messageport-trpc (Structured Clone)
+const router = t.router({
+  getData: t.procedure.query(() => {
+    return {
+      date: new Date(),      // Stays a Date object
+      map: new Map([['a', 1]]), // Stays a Map
+      set: new Set([1, 2, 3]),  // Stays a Set
+      buffer: new ArrayBuffer(8), // Stays an ArrayBuffer
+    };
+  }),
+});
+```
+
+<Aside type="tip">
+Structured Clone is not only more correct but also faster than JSON serialization for large payloads, since it avoids the string encoding/decoding step.
+</Aside>
+
+## When to Use ipcMain/ipcRenderer
+
+The traditional approach may still be appropriate when:
+
+- You have a very simple app with only a few IPC calls
+- You don't need TypeScript type safety
+- You need to use Electron APIs that don't support MessagePort (rare)
+- You're maintaining legacy code and the migration cost is too high
+
+For all other cases, `electron-messageport-trpc` provides a better developer experience and more robust communication.

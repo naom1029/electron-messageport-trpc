@@ -1,0 +1,93 @@
+---
+title: Subscriptions
+description: Real-time data streaming using tRPC subscriptions over MessagePort
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+tRPC v11 uses **async iterables** for subscriptions. This library natively supports them over MessagePort, giving you real-time data streaming between Electron processes.
+
+## Defining a Subscription
+
+Use `t.procedure.subscription()` to define a subscription that yields values over time:
+
+```typescript
+// src/main/router.ts
+import { initTRPC } from '@trpc/server';
+import { z } from 'zod';
+import { on } from 'events';
+
+const t = initTRPC.create();
+
+export const appRouter = t.router({
+  onTimer: t.procedure
+    .input(z.object({ intervalMs: z.number().min(100) }))
+    .subscription(async function* ({ input, signal }) {
+      let count = 0;
+      while (!signal.aborted) {
+        yield { count: count++, timestamp: new Date() };
+        await new Promise((resolve) => setTimeout(resolve, input.intervalMs));
+      }
+    }),
+});
+```
+
+<Aside type="tip">
+The `signal` parameter is an `AbortSignal` that is triggered when the client unsubscribes or the port is closed. Always check `signal.aborted` in your loops to clean up properly.
+</Aside>
+
+## Subscribing from the Renderer
+
+```typescript
+// src/renderer/index.ts
+import { createTRPCClient } from '@trpc/client';
+import { portLink, getPort } from 'electron-messageport-trpc/renderer';
+import type { AppRouter } from '../main/router';
+
+const trpc = createTRPCClient<AppRouter>({
+  links: [portLink({ port: getPort() })],
+});
+
+// Subscribe and iterate over values
+const subscription = trpc.onTimer.subscribe(
+  { intervalMs: 1000 },
+  {
+    onData(value) {
+      // value is typed as { count: number; timestamp: Date }
+      console.log(`Tick #${value.count} at ${value.timestamp}`);
+    },
+    onError(err) {
+      console.error('Subscription error:', err);
+    },
+    onComplete() {
+      console.log('Subscription ended');
+    },
+  },
+);
+
+// Later, unsubscribe to stop the stream
+subscription.unsubscribe();
+```
+
+## How It Works Under the Hood
+
+1. The client sends a `{ kind: 'request', method: 'subscription', ... }` message.
+2. The server calls the procedure and receives an async iterable.
+3. For each yielded value, the server sends `{ kind: 'result', type: 'data', data }`.
+4. When the client calls `unsubscribe()`, it sends `{ kind: 'subscription.stop', id }`.
+5. The server aborts the `AbortController`, which signals the async generator to stop.
+6. If the iterable completes naturally, the server sends `{ kind: 'result', type: 'stopped' }`.
+
+<Aside type="note">
+Because MessagePort uses the Structured Clone algorithm, `Date` objects in the subscription data are transferred as real `Date` instances -- no manual parsing needed.
+</Aside>
+
+## Error Handling
+
+If the subscription procedure throws an error, the server sends a `{ kind: 'error' }` message with the tRPC error shape. The client's `onError` callback receives a `TRPCClientError` instance.
+
+## Lifecycle and Cleanup
+
+- **Client unsubscribes**: sends `subscription.stop`, server aborts the `AbortController`
+- **Port closes**: the server's `close` event handler aborts all active subscriptions
+- **`destroy()` called**: same as port close -- all subscriptions are aborted and the port is closed

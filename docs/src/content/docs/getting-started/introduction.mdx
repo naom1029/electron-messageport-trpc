@@ -1,0 +1,65 @@
+---
+title: Introduction
+description: MessagePort-based tRPC v11 transport for Electron
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+**electron-messageport-trpc** is a transport layer that connects [tRPC v11](https://trpc.io/) with Electron's [MessagePort](https://www.electronjs.org/docs/latest/tutorial/message-ports) API. It enables type-safe IPC between Electron processes using tRPC's familiar patterns.
+
+## Why MessagePort + tRPC?
+
+Traditional Electron IPC using `ipcMain` / `ipcRenderer` has limitations:
+
+- **Star topology** -- all communication must pass through the main process
+- **No type safety** -- channel names are plain strings with no compile-time checks
+- **JSON serialization** -- `Date`, `Map`, `Set`, and other complex types are lost
+
+This library solves all three problems:
+
+| Feature | ipcMain/ipcRenderer | electron-messageport-trpc |
+|---|---|---|
+| Topology | Star (main as hub) | Flexible (renderer-to-renderer, main-to-utility) |
+| Type safety | None | Full end-to-end via tRPC |
+| Serialization | JSON.stringify | Structured Clone (native `Date`, `Map`, `Set`) |
+| Subscriptions | Manual event listeners | tRPC subscriptions (async iterables) |
+
+## How It Works
+
+The library uses Electron's `MessageChannelMain` to establish direct MessagePort connections between processes. A lightweight message protocol carries tRPC requests and responses over these ports.
+
+```
+Renderer                Main Process
+  |                         |
+  |  MessagePort (port1)    |
+  |<========================>|
+  |  tRPC requests/results  |
+  |                         |
+```
+
+1. The **main process** creates a `MessageChannelMain` and sends one port to the renderer via `webContents.postMessage`.
+2. The **preload script** receives the port and exposes it to the renderer via `contextBridge`.
+3. The **renderer** uses the port as a tRPC link, gaining full type-safe RPC with subscriptions.
+
+<Aside type="tip">
+Because MessagePort uses the [Structured Clone algorithm](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm), values like `Date`, `Map`, `Set`, `ArrayBuffer`, and `Error` are transferred natively -- no JSON serialization needed.
+</Aside>
+
+## Architecture Overview
+
+```
+┌─────────────┐   MessagePort   ┌──────────────┐
+│  Renderer A  │<===============>│  Main Process │
+└─────────────┘                 └──────┬───────┘
+                                       │ MessagePort
+┌─────────────┐   MessagePort   ┌──────┴───────┐
+│  Renderer B  │<===============>│  Main Process │
+└─────────────┘                 └──────────────┘
+```
+
+In advanced topologies, the main process can broker ports between two renderers for direct peer-to-peer communication, or connect to utility processes.
+
+## Next Steps
+
+- [Installation](/getting-started/installation/) -- add the package to your project
+- [Quick Start](/getting-started/quick-start/) -- set up a working renderer-to-main example in minutes

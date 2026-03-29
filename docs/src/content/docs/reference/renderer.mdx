@@ -1,0 +1,88 @@
+---
+title: Renderer API
+description: API reference for electron-messageport-trpc/renderer
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+```typescript
+import { portLink, getPort } from 'electron-messageport-trpc/renderer';
+```
+
+## `portLink(opts)`
+
+Creates a tRPC link that communicates over a MessagePort. Use this as a link in your `createTRPCClient` configuration.
+
+### Parameters
+
+```typescript
+interface PortLinkOptions {
+  port: MessagePort | Promise<MessagePort>;
+}
+```
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `port` | `MessagePort \| Promise<MessagePort>` | Yes | The renderer-side MessagePort, or a promise that resolves to one |
+
+### Returns
+
+`TRPCLink<TRouter>` -- a tRPC link function compatible with `createTRPCClient`.
+
+### Example
+
+```typescript
+import { createTRPCClient } from '@trpc/client';
+import { portLink, getPort } from 'electron-messageport-trpc/renderer';
+import type { AppRouter } from '../main/router';
+
+const trpc = createTRPCClient<AppRouter>({
+  links: [
+    portLink({ port: getPort() }),
+  ],
+});
+```
+
+<Aside type="tip">
+Since `portLink` accepts a `Promise<MessagePort>`, you can pass `getPort()` directly. The link will queue outgoing requests until the port resolves, then flush them.
+</Aside>
+
+### How It Works
+
+1. On first use, the link resolves the port promise and sets up a `message` event listener.
+2. Each request is assigned a unique numeric ID.
+3. Requests are sent as `ClientMessage` objects via `port.postMessage()`.
+4. Responses are matched by ID and dispatched to the appropriate observer.
+5. For subscriptions, the observer receives multiple `onData` callbacks until `onComplete` or `onError`.
+6. When a subscription is unsubscribed, a `subscription.stop` message is sent.
+
+---
+
+## `getPort()`
+
+Returns a `Promise<MessagePort>` that resolves to the port exposed by the preload script.
+
+### Parameters
+
+None.
+
+### Returns
+
+`Promise<MessagePort>`
+
+### Throws
+
+Throws an `Error` if `exposePortReceiver()` was not called in the preload script (i.e., `window.electronTRPCPort` is `undefined`).
+
+```
+Error: electronTRPCPort not found. Did you call exposePortReceiver() in your preload script?
+```
+
+### Example
+
+```typescript
+import { getPort } from 'electron-messageport-trpc/renderer';
+
+const port = await getPort();
+// Use the port directly, or pass it to portLink
+```

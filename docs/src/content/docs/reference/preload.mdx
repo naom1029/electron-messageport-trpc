@@ -1,0 +1,55 @@
+---
+title: Preload API
+description: API reference for electron-messageport-trpc/preload
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+```typescript
+import { exposePortReceiver } from 'electron-messageport-trpc/preload';
+```
+
+## `exposePortReceiver()`
+
+Sets up the preload script to receive a MessagePort from the main process and expose it to the renderer.
+
+### What It Does
+
+1. Listens on the internal IPC channel for a port sent by `createRendererPort()`.
+2. Uses `contextBridge.exposeInMainWorld()` to expose a `window.electronTRPCPort` object with a `getPort()` method.
+3. `getPort()` returns a `Promise<MessagePort>` that resolves when the main process sends the port.
+
+### Parameters
+
+None.
+
+### Returns
+
+`void`
+
+### Example
+
+```typescript
+// preload.ts
+import { exposePortReceiver } from 'electron-messageport-trpc/preload';
+
+exposePortReceiver();
+```
+
+<Aside type="caution">
+This function must be called in the preload script, not in the main process or renderer. It uses `ipcRenderer` and `contextBridge` from Electron, which are only available in the preload context.
+</Aside>
+
+### What Gets Exposed
+
+After calling `exposePortReceiver()`, the renderer has access to:
+
+```typescript
+window.electronTRPCPort.getPort(): Promise<MessagePort>
+```
+
+You do not need to use this directly -- the `getPort()` function from `electron-messageport-trpc/renderer` wraps it for you.
+
+### Security
+
+The function uses `contextBridge.exposeInMainWorld()` to safely expose the port getter. This respects Electron's context isolation. No raw Electron APIs are leaked to the renderer.

@@ -1,0 +1,162 @@
+---
+title: Message Protocol
+description: Wire protocol used between client and server over MessagePort
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This page documents the low-level message protocol used over the MessagePort. You do not need to know this to use the library, but it is useful for debugging or building custom integrations.
+
+<Aside type="note">
+All messages are sent via `port.postMessage()` and received via the `message` event. Because MessagePort uses the Structured Clone algorithm, messages are not serialized to JSON -- objects are transferred natively.
+</Aside>
+
+## Client to Server Messages
+
+### Request
+
+Sent when the client initiates a query, mutation, or subscription.
+
+```typescript
+interface TRPCPortRequest {
+  kind: 'request';
+  id: number;
+  method: 'query' | 'mutation' | 'subscription';
+  path: string;
+  input: unknown;
+  lastEventId?: string;
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | `'request'` | Message discriminator |
+| `id` | `number` | Unique request identifier (monotonically increasing) |
+| `method` | `'query' \| 'mutation' \| 'subscription'` | The tRPC procedure type |
+| `path` | `string` | Dot-separated procedure path (e.g., `'user.getById'`) |
+| `input` | `unknown` | The procedure input, transferred via Structured Clone |
+| `lastEventId` | `string \| undefined` | For subscription resumption (optional) |
+
+### Subscription Stop
+
+Sent when the client unsubscribes from an active subscription.
+
+```typescript
+interface TRPCPortSubscriptionStop {
+  kind: 'subscription.stop';
+  id: number;
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | `'subscription.stop'` | Message discriminator |
+| `id` | `number` | The ID of the subscription to stop |
+
+## Server to Client Messages
+
+### Result (Data)
+
+Sent when a procedure returns data or a subscription yields a value.
+
+```typescript
+interface TRPCPortResultData {
+  kind: 'result';
+  id: number;
+  type: 'data';
+  data: unknown;
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | `'result'` | Message discriminator |
+| `id` | `number` | The request ID this result belongs to |
+| `type` | `'data'` | Result type discriminator |
+| `data` | `unknown` | The procedure result, transferred via Structured Clone |
+
+For **queries and mutations**, a single `data` result is sent, and the request is complete.
+
+For **subscriptions**, multiple `data` results may be sent over time.
+
+### Result (Stopped)
+
+Sent when a subscription ends naturally (the async iterable completes).
+
+```typescript
+interface TRPCPortResultStopped {
+  kind: 'result';
+  id: number;
+  type: 'stopped';
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | `'result'` | Message discriminator |
+| `id` | `number` | The subscription ID |
+| `type` | `'stopped'` | Indicates the subscription has ended |
+
+### Error
+
+Sent when a procedure throws an error.
+
+```typescript
+interface TRPCPortError {
+  kind: 'error';
+  id: number;
+  error: {
+    code: number;
+    message: string;
+    data: unknown;
+  };
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | `'error'` | Message discriminator |
+| `id` | `number` | The request ID that caused the error |
+| `error.code` | `number` | tRPC error code (matches HTTP status codes) |
+| `error.message` | `string` | Human-readable error message |
+| `error.data` | `unknown` | Additional error metadata (tRPC error shape data) |
+
+## Message Flow Examples
+
+### Query
+
+```
+Client                          Server
+  |                               |
+  |  { kind: 'request',          |
+  |    method: 'query',          |
+  |    id: 1, path, input }      |
+  |------------------------------>|
+  |                               |
+  |  { kind: 'result',           |
+  |    id: 1, type: 'data',      |
+  |    data }                     |
+  |<------------------------------|
+```
+
+### Subscription
+
+```
+Client                          Server
+  |                               |
+  |  { kind: 'request',          |
+  |    method: 'subscription',   |
+  |    id: 1, path, input }      |
+  |------------------------------>|
+  |                               |
+  |  { kind: 'result',           |
+  |    id: 1, type: 'data', ..}  |
+  |<------------------------------|
+  |  { kind: 'result',           |
+  |    id: 1, type: 'data', ..}  |
+  |<------------------------------|
+  |                               |
+  |  { kind: 'subscription.stop',|
+  |    id: 1 }                   |
+  |------------------------------>|
+```

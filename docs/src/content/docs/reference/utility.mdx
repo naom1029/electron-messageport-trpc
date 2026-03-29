@@ -1,0 +1,70 @@
+---
+title: Utility Process API
+description: API reference for electron-messageport-trpc/utility (planned)
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+The utility process API is **planned but not yet implemented**. The `electron-messageport-trpc/utility` entry point currently exports nothing. This page documents the intended API.
+</Aside>
+
+```typescript
+import { createParentPortHandler } from 'electron-messageport-trpc/utility';
+```
+
+## `createParentPortHandler(opts)` (Planned)
+
+Attaches a tRPC request handler to the utility process's `parentPort`. This allows the main process (or, via brokering, a renderer) to call tRPC procedures running in a utility process.
+
+### Parameters
+
+```typescript
+interface CreateParentPortHandlerOptions<TRouter extends AnyRouter> {
+  router: TRouter;
+  createContext?: () => Promise<unknown>;
+}
+```
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `router` | `AnyRouter` | Yes | Your tRPC router instance |
+| `createContext` | `() => Promise<unknown>` | No | Factory function called for every request |
+
+### Returns
+
+A `PortHandler` object with a `destroy()` method.
+
+### Planned Example
+
+```typescript
+// utility-worker.ts
+import { createParentPortHandler } from 'electron-messageport-trpc/utility';
+import { initTRPC } from '@trpc/server';
+
+const t = initTRPC.create();
+
+const router = t.router({
+  heavyComputation: t.procedure.query(async () => {
+    // Runs in a separate thread, not blocking the main process
+    return performExpensiveWork();
+  }),
+});
+
+createParentPortHandler({ router });
+```
+
+```typescript
+// main process
+import { utilityProcess } from 'electron';
+
+const child = utilityProcess.fork('utility-worker.js');
+// The main process can then communicate with the utility process
+// via its parentPort, using the standard tRPC protocol
+```
+
+### Use Cases
+
+- **CPU-intensive computation** without blocking the main process
+- **File processing** in a background thread
+- **Database operations** isolated from the main process
