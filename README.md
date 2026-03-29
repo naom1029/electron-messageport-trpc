@@ -89,7 +89,7 @@ client.events.subscribe(undefined, {
 | Electron | >= 22 |
 | @trpc/server | ^11.0.0 |
 | @trpc/client | ^11.0.0 |
-| Node.js | >= 18 |
+| Node.js | >= 20 |
 
 ## Documentation
 

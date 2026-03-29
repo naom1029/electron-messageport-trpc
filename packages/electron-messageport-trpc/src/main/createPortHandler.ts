@@ -1,8 +1,8 @@
 import type { AnyRouter } from '@trpc/server';
 import {
   callProcedure,
-  getTRPCErrorFromUnknown,
   getErrorShape,
+  getTRPCErrorFromUnknown,
   isAsyncIterable,
 } from '@trpc/server/unstable-core-do-not-import';
 import type {
@@ -99,8 +99,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
     try {
       const ctx = (await opts.createContext?.()) ?? {};
 
-      const ac =
-        method === 'subscription' ? new AbortController() : undefined;
+      const ac = method === 'subscription' ? new AbortController() : undefined;
       if (ac) {
         subscriptions.set(id, ac);
       }

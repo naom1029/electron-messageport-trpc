@@ -1,6 +1,6 @@
 import type { AnyRouter } from '@trpc/server';
-import { createPortHandler } from '../main/createPortHandler';
 import type { PortHandler } from '../main/createPortHandler';
+import { createPortHandler } from '../main/createPortHandler';
 
 interface ParentPortLike {
   on(

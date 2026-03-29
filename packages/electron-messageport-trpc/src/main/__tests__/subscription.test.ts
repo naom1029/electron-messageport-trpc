@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
-import { initTRPC } from '@trpc/server';
 import { createTRPCClient } from '@trpc/client';
+import { initTRPC } from '@trpc/server';
+import { describe, expect, it, vi } from 'vitest';
+import { portLink } from '../../renderer/portLink';
 import { createBridgedPair } from '../../shared/__tests__/mockBridge';
 import { createPortHandler } from '../createPortHandler';
-import { portLink } from '../../renderer/portLink';
 
 function setupRouter() {
   const t = initTRPC.create();
@@ -182,11 +182,7 @@ describe('subscription', () => {
       });
 
       // Assert
-      expect(received).toEqual([
-        { count: 2 },
-        { count: 1 },
-        { count: 0 },
-      ]);
+      expect(received).toEqual([{ count: 2 }, { count: 1 }, { count: 0 }]);
     });
 
     it('should be able to unsubscribe from the client side', async () => {
