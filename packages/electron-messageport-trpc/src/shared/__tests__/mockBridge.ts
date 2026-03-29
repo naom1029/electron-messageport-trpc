@@ -28,13 +28,13 @@ export function createBridgedPair(): {
   }) as EventListener);
 
   // Override postMessage to route through bridge
-  const origServerPost = serverPort.postMessage.bind(serverPort);
+  const _origServerPost = serverPort.postMessage.bind(serverPort);
   serverPort.postMessage = (data: unknown) => {
     const cloned = structuredClone(data);
     serverPort.emit('__outgoing', cloned);
   };
 
-  const origClientPost = clientPort.postMessage.bind(clientPort);
+  const _origClientPost = clientPort.postMessage.bind(clientPort);
   clientPort.postMessage = (data: unknown) => {
     const cloned = structuredClone(data);
     clientPort.dispatchEvent(new CustomEvent('__outgoing', { detail: cloned }));
