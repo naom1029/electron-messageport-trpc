@@ -4,7 +4,7 @@ import type { AnyRouter } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
 import type { ClientMessage, ServerMessage } from '../shared/protocol';
 
-export interface RendererPortLike {
+interface RendererPortLike {
   addEventListener(
     event: 'message',
     listener: (event: MessageEvent) => void,
