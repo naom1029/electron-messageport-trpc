@@ -1,0 +1,129 @@
+---
+title: Main Process API
+description: API reference for electron-messageport-trpc/main
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+```typescript
+import { createPortBroker, createPortHandler } from 'electron-messageport-trpc/main';
+```
+
+## `createPortBroker()`
+
+Creates a port broker that generates MessagePort pairs for connecting renderers to the main process.
+
+### Returns
+
+A `PortBroker` object.
+
+### `PortBroker`
+
+#### `broker.createRendererPort(webContents)`
+
+Creates a `MessageChannelMain` pair, sends one port to the specified renderer, and returns the other.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `webContents` | `WebContents` | The target renderer's `webContents` object (e.g., `win.webContents`) |
+
+**Returns:**
+
+```typescript
+{
+  serverPort: MessagePortMain;
+}
+```
+
+The `serverPort` is the main-process side of the channel. Pass it to `createPortHandler()` to start handling tRPC requests.
+
+### Example
+
+```typescript
+import { createPortBroker } from 'electron-messageport-trpc/main';
+
+const broker = createPortBroker();
+
+// After the window loads:
+const { serverPort } = broker.createRendererPort(win.webContents);
+```
+
+<Aside type="note">
+Internally, `createRendererPort` calls `webContents.postMessage()` with the port as a transferable. The preload script must call `exposePortReceiver()` to receive it.
+</Aside>
+
+---
+
+## `createPortHandler(opts)`
+
+Attaches a tRPC request handler to a MessagePort. It listens for incoming tRPC requests (queries, mutations, subscriptions) and routes them to the given router.
+
+### Parameters
+
+```typescript
+interface CreatePortHandlerOptions<TRouter extends AnyRouter> {
+  port: MessagePortLike;
+  router: TRouter;
+  createContext?: () => Promise<unknown>;
+}
+```
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `port` | `MessagePortMain` | Yes | The server-side MessagePort (from `createRendererPort`) |
+| `router` | `AnyRouter` | Yes | Your tRPC router instance |
+| `createContext` | `() => Promise<unknown>` | No | Factory function called for every request to create the context object |
+
+### Returns
+
+A `PortHandler` object.
+
+### `PortHandler`
+
+#### `handler.destroy()`
+
+Stops all active subscriptions, aborts their `AbortController`s, and closes the underlying MessagePort.
+
+Call this when the associated `BrowserWindow` is closed or the connection is no longer needed.
+
+### Example
+
+```typescript
+import { createPortBroker, createPortHandler } from 'electron-messageport-trpc/main';
+import { appRouter } from './router';
+
+const broker = createPortBroker();
+
+app.whenReady().then(() => {
+  const win = new BrowserWindow({ /* ... */ });
+
+  win.webContents.on('did-finish-load', () => {
+    const { serverPort } = broker.createRendererPort(win.webContents);
+
+    const handler = createPortHandler({
+      port: serverPort,
+      router: appRouter,
+      createContext: async () => ({
+        // per-request context
+        windowId: win.id,
+      }),
+    });
+
+    // Clean up when the window closes
+    win.on('closed', () => {
+      handler.destroy();
+    });
+  });
+});
+```
+
+### Subscription Handling
+
+When a `subscription` request arrives:
+
+1. The procedure is called and must return an async iterable.
+2. Each yielded value is sent as a `{ kind: 'result', type: 'data' }` message.
+3. When the client sends `{ kind: 'subscription.stop' }`, the `AbortController` is aborted.
+4. When the port closes, all active subscriptions are aborted automatically.

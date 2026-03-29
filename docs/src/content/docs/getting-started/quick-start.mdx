@@ -1,0 +1,107 @@
+---
+title: Quick Start
+description: Set up a working renderer-to-main tRPC connection in minutes
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+This guide walks through a minimal setup where a **renderer** process calls procedures on the **main** process.
+
+<Steps>
+
+1. **Define your tRPC router (main process)**
+
+    ```typescript
+    // src/main/router.ts
+    import { initTRPC } from '@trpc/server';
+    import { z } from 'zod';
+
+    const t = initTRPC.create();
+
+    export const appRouter = t.router({
+      greet: t.procedure
+        .input(z.object({ name: z.string() }))
+        .query(({ input }) => {
+          return `Hello, ${input.name}!`;
+        }),
+    });
+
+    export type AppRouter = typeof appRouter;
+    ```
+
+2. **Set up the port broker and handler (main process)**
+
+    ```typescript
+    // src/main/index.ts
+    import { app, BrowserWindow } from 'electron';
+    import { createPortBroker, createPortHandler } from 'electron-messageport-trpc/main';
+    import { appRouter } from './router';
+
+    const broker = createPortBroker();
+
+    app.whenReady().then(() => {
+      const win = new BrowserWindow({
+        webPreferences: {
+          preload: '/path/to/preload.js',
+        },
+      });
+
+      win.loadFile('index.html');
+
+      win.webContents.on('did-finish-load', () => {
+        const { serverPort } = broker.createRendererPort(win.webContents);
+
+        createPortHandler({
+          port: serverPort,
+          router: appRouter,
+        });
+      });
+    });
+    ```
+
+3. **Expose the port receiver (preload script)**
+
+    ```typescript
+    // src/preload/index.ts
+    import { exposePortReceiver } from 'electron-messageport-trpc/preload';
+
+    exposePortReceiver();
+    ```
+
+4. **Create the tRPC client (renderer process)**
+
+    ```typescript
+    // src/renderer/index.ts
+    import { createTRPCClient } from '@trpc/client';
+    import { portLink, getPort } from 'electron-messageport-trpc/renderer';
+    import type { AppRouter } from '../main/router';
+
+    const trpc = createTRPCClient<AppRouter>({
+      links: [
+        portLink({ port: getPort() }),
+      ],
+    });
+
+    // Now you can call procedures with full type safety!
+    const greeting = await trpc.greet.query({ name: 'World' });
+    console.log(greeting); // "Hello, World!"
+    ```
+
+</Steps>
+
+## What Just Happened?
+
+1. `createPortBroker()` creates a broker that can generate MessagePort pairs.
+2. `broker.createRendererPort(webContents)` creates a `MessageChannelMain`, sends one port to the renderer via `postMessage`, and returns the other port (`serverPort`).
+3. `exposePortReceiver()` in the preload script listens for the incoming port and exposes a `getPort()` function to the renderer via `contextBridge`.
+4. In the renderer, `getPort()` returns a `Promise<MessagePort>` that resolves once the main process sends the port.
+5. `portLink({ port })` creates a tRPC link that sends requests and receives responses over the MessagePort.
+
+<Aside type="tip">
+`portLink` accepts both a `MessagePort` and a `Promise<MessagePort>`, so you can pass `getPort()` directly without awaiting it.
+</Aside>
+
+## Next Steps
+
+- [Subscriptions](/guides/subscriptions/) -- real-time data streaming with tRPC subscriptions
+- [API Reference](/reference/main/) -- detailed documentation for every export
