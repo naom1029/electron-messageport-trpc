@@ -6,7 +6,11 @@ export default defineConfig({
     starlight({
       title: 'electron-messageport-trpc',
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/naom1029/electron-messageport-trpc' },
+        {
+          icon: 'github',
+          label: 'GitHub',
+          href: 'https://github.com/naom1029/electron-messageport-trpc',
+        },
       ],
       sidebar: [
         {
