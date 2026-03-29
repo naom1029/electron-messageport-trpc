@@ -6,11 +6,11 @@ import type { ClientMessage, ServerMessage } from '../shared/protocol';
 
 interface RendererPortLike {
   addEventListener(
-    event: string,
+    event: 'message',
     listener: (event: MessageEvent) => void,
   ): void;
   removeEventListener(
-    event: string,
+    event: 'message',
     listener: (event: MessageEvent) => void,
   ): void;
   postMessage(data: unknown): void;
@@ -46,12 +46,7 @@ export function portLink<TRouter extends AnyRouter>(
 
       if (msg.kind === 'error') {
         pending.delete(msg.id);
-        req.onError(
-          TRPCClientError.from({
-            error: msg.error,
-            result: null,
-          } as any),
-        );
+        req.onError(TRPCClientError.from({ error: msg.error }));
       } else if (msg.kind === 'result' && msg.type === 'data') {
         req.onData(msg.data);
         if (req.type !== 'subscription') {
@@ -68,7 +63,7 @@ export function portLink<TRouter extends AnyRouter>(
       if (resolvedPort) return resolvedPort;
       resolvedPort = await portPromise;
       if (!initialized) {
-        resolvedPort.addEventListener('message', handleMessage as any);
+        resolvedPort.addEventListener('message', handleMessage);
         resolvedPort.start();
         initialized = true;
       }
@@ -91,7 +86,9 @@ export function portLink<TRouter extends AnyRouter>(
             observer.error(
               error instanceof TRPCClientError
                 ? error
-                : TRPCClientError.from(error as any),
+                : error instanceof Error
+                  ? TRPCClientError.from(error)
+                  : TRPCClientError.from(error as object),
             );
           },
         });
