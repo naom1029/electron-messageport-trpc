@@ -1,12 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
 import { initTRPC } from '@trpc/server';
+import { describe, expect, it, vi } from 'vitest';
 import { MockMessagePortMain } from '../../shared/__tests__/mockPort';
 import type { ClientMessage, ServerMessage } from '../../shared/protocol';
 import { createPortHandler } from '../createPortHandler';
 
-function waitForMessage(
-  port: MockMessagePortMain,
-): Promise<ServerMessage> {
+function waitForMessage(port: MockMessagePortMain): Promise<ServerMessage> {
   return new Promise((resolve) => {
     const handler = (event: { data: ServerMessage }) => {
       port.off('message', handler);

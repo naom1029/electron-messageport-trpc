@@ -1,4 +1,4 @@
-import { ipcRenderer, contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 import { PORT_INIT_CHANNEL } from '../shared/constants';
 
 export function exposePortReceiver(): void {

@@ -1,2 +1,2 @@
-export { createParentPortHandler } from './parentPortHandler';
 export type { CreateParentPortHandlerOptions } from './parentPortHandler';
+export { createParentPortHandler } from './parentPortHandler';

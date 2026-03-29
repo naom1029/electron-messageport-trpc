@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { initTRPC } from '@trpc/server';
 import { createTRPCClient } from '@trpc/client';
-import { createBridgedPair } from '../../shared/__tests__/mockBridge';
+import { initTRPC } from '@trpc/server';
+import { describe, expect, it } from 'vitest';
 import { createPortHandler } from '../../main/createPortHandler';
+import { createBridgedPair } from '../../shared/__tests__/mockBridge';
 import { portLink } from '../portLink';
 
 function setupRouter() {

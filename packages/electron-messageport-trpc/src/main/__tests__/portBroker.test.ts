@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MockMessagePortMain } from '../../shared/__tests__/mockPort';
 
 vi.mock('electron', () => ({

@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
-import { initTRPC } from '@trpc/server';
 import { createTRPCClient } from '@trpc/client';
-import { MockMessagePortMain } from '../../shared/__tests__/mockPort';
+import { initTRPC } from '@trpc/server';
+import { describe, expect, it, vi } from 'vitest';
 import { portLink } from '../../renderer/portLink';
+import { MockMessagePortMain } from '../../shared/__tests__/mockPort';
 import { MockRendererPort } from '../../shared/__tests__/mockRendererPort';
 import { createParentPortHandler } from '../parentPortHandler';
 

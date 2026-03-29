@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { initTRPC, TRPCError } from '@trpc/server';
 import { createTRPCClient } from '@trpc/client';
+import { initTRPC, TRPCError } from '@trpc/server';
+import { describe, expect, it } from 'vitest';
+import { portLink } from '../../renderer/portLink';
 import { createBridgedPair } from '../../shared/__tests__/mockBridge';
 import { createPortHandler } from '../createPortHandler';
-import { portLink } from '../../renderer/portLink';
 
 describe('middleware and context', () => {
   describe('createContext', () => {
@@ -163,9 +163,7 @@ describe('middleware and context', () => {
       });
 
       // Assert
-      expect(received).toEqual([
-        { userId: 'sub-user', event: 'connected' },
-      ]);
+      expect(received).toEqual([{ userId: 'sub-user', event: 'connected' }]);
     });
   });
 });
