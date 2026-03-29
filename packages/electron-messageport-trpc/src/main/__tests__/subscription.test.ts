@@ -1,6 +1,6 @@
 import { createTRPCClient } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { portLink } from '../../renderer/portLink';
 import { createBridgedPair } from '../../shared/__tests__/mockBridge';
 import { createPortHandler } from '../createPortHandler';
@@ -165,7 +165,7 @@ describe('subscription', () => {
 
       // Act
       await new Promise<void>((resolve, reject) => {
-        const sub = client.countdown.subscribe(
+        const _sub = client.countdown.subscribe(
           { from: 2 },
           {
             onData(data) {
