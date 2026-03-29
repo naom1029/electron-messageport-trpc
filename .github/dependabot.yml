@@ -13,6 +13,10 @@ updates:
       trpc:
         patterns:
           - "@trpc/*"
+      astro:
+        patterns:
+          - "astro"
+          - "@astrojs/*"
       dev-dependencies:
         dependency-type: development
         exclude-patterns:
