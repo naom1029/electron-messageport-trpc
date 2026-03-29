@@ -112,6 +112,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
         getRawInput: async () => input,
         ctx,
         signal: ac?.signal,
+        batchIndex: 0,
       });
 
       if (method === 'subscription' && isAsyncIterable(result)) {
@@ -143,7 +144,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
   }
 
   function cleanup(): void {
-    for (const [id, ac] of subscriptions) {
+    for (const [, ac] of subscriptions) {
       ac.abort();
     }
     subscriptions.clear();
