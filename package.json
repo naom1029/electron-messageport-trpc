@@ -6,7 +6,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "pnpm --filter electron-messageport-trpc build",
     "test": "pnpm -r --stream test",
     "test:ci": "pnpm -r --stream test:ci",
     "lint": "biome check .",
