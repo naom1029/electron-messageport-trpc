@@ -32,7 +32,7 @@ interface PendingRequest {
 export function portLink<TRouter extends AnyRouter>(
   opts: PortLinkOptions,
 ): TRPCLink<TRouter> {
-  return (runtime) => {
+  return () => {
     const portPromise = Promise.resolve(opts.port);
     const pending = new Map<number, PendingRequest>();
     let idCounter = 0;
