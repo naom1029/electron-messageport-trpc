@@ -115,7 +115,12 @@ export function createPortHandler<TRouter extends AnyRouter>(
       });
 
       if (method === 'subscription' && isAsyncIterable(result)) {
-        iterateSubscription(id, result, ac!.signal, method, path, input);
+        const signal = ac?.signal;
+        if (!signal) {
+          throw new Error('Subscription request is missing an abort signal');
+        }
+
+        iterateSubscription(id, result, signal, method, path, input);
         return;
       }
 
