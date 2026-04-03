@@ -1,19 +1,13 @@
 ---
 title: Utility Process API
-description: API reference for electron-messageport-trpc/utility (planned)
+description: API reference for electron-messageport-trpc/utility
 ---
-
-import { Aside } from '@astrojs/starlight/components';
-
-<Aside type="caution">
-The utility process API is **planned but not yet implemented**. The `electron-messageport-trpc/utility` entry point currently exports nothing. This page documents the intended API.
-</Aside>
 
 ```typescript
 import { createParentPortHandler } from 'electron-messageport-trpc/utility';
 ```
 
-## `createParentPortHandler(opts)` (Planned)
+## `createParentPortHandler(opts)`
 
 Attaches a tRPC request handler to the utility process's `parentPort`. This allows the main process (or, via brokering, a renderer) to call tRPC procedures running in a utility process.
 
@@ -22,6 +16,7 @@ Attaches a tRPC request handler to the utility process's `parentPort`. This allo
 ```typescript
 interface CreateParentPortHandlerOptions<TRouter extends AnyRouter> {
   router: TRouter;
+  parentPort: ParentPort;
   createContext?: () => Promise<unknown>;
 }
 ```
@@ -29,13 +24,14 @@ interface CreateParentPortHandlerOptions<TRouter extends AnyRouter> {
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `router` | `AnyRouter` | Yes | Your tRPC router instance |
+| `parentPort` | `ParentPort` | Yes | The utility process parent port from `electron` |
 | `createContext` | `() => Promise<unknown>` | No | Factory function called for every request |
 
 ### Returns
 
-A `PortHandler` object with a `destroy()` method.
+A `{ handlers: PortHandler[] }` object. Each transferred port creates one handler.
 
-### Planned Example
+### Example
 
 ```typescript
 // utility-worker.ts
@@ -51,16 +47,26 @@ const router = t.router({
   }),
 });
 
-createParentPortHandler({ router });
+createParentPortHandler({
+  router,
+  parentPort: process.parentPort,
+});
 ```
 
 ```typescript
 // main process
-import { utilityProcess } from 'electron';
+import { MessageChannelMain, utilityProcess } from 'electron';
+import { createTRPCClient } from '@trpc/client';
+import { mainPortLink } from 'electron-messageport-trpc/main';
 
 const child = utilityProcess.fork('utility-worker.js');
-// The main process can then communicate with the utility process
-// via its parentPort, using the standard tRPC protocol
+const { port1, port2 } = new MessageChannelMain();
+
+child.postMessage({ type: 'connect' }, [port1]);
+
+const client = createTRPCClient({
+  links: [mainPortLink({ port: port2 })],
+});
 ```
 
 ### Use Cases
@@ -68,3 +74,4 @@ const child = utilityProcess.fork('utility-worker.js');
 - **CPU-intensive computation** without blocking the main process
 - **File processing** in a background thread
 - **Database operations** isolated from the main process
+- **Renderer-to-utility brokering** when the main process should only hand off a port
