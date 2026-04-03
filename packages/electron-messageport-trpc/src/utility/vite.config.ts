@@ -4,10 +4,10 @@ export default defineConfig({
   build: {
     lib: {
       entry: 'src/utility/index.ts',
-      formats: ['es', 'cjs'],
-      fileName: 'utility',
+      formats: ['es'],
+      fileName: () => 'utility.mjs',
     },
-    outDir: '../../dist',
+    outDir: 'dist',
     emptyOutDir: false,
     rollupOptions: {
       external: ['electron', '@trpc/server', '@trpc/client'],
