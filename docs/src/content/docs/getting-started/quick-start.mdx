@@ -29,15 +29,13 @@ This guide walks through a minimal setup where a **renderer** process calls proc
     export type AppRouter = typeof appRouter;
     ```
 
-2. **Set up the port broker and handler (main process)**
+2. **Attach your router to the window (main process)**
 
     ```typescript
     // src/main/index.ts
     import { app, BrowserWindow } from 'electron';
-    import { createPortBroker, createPortHandler } from 'electron-messageport-trpc/main';
+    import { createWindowMessagePortHandler } from 'electron-messageport-trpc/main';
     import { appRouter } from './router';
-
-    const broker = createPortBroker();
 
     app.whenReady().then(() => {
       const win = new BrowserWindow({
@@ -48,13 +46,9 @@ This guide walks through a minimal setup where a **renderer** process calls proc
 
       win.loadFile('index.html');
 
-      win.webContents.on('did-finish-load', () => {
-        const { serverPort } = broker.createRendererPort(win.webContents);
-
-        createPortHandler({
-          port: serverPort,
-          router: appRouter,
-        });
+      createWindowMessagePortHandler({
+        router: appRouter,
+        windows: [win],
       });
     });
     ```
@@ -73,13 +67,11 @@ This guide walks through a minimal setup where a **renderer** process calls proc
     ```typescript
     // src/renderer/index.ts
     import { createTRPCClient } from '@trpc/client';
-    import { portLink, getPort } from 'electron-messageport-trpc/renderer';
+    import { getPort, portLink } from 'electron-messageport-trpc/renderer';
     import type { AppRouter } from '../main/router';
 
     const trpc = createTRPCClient<AppRouter>({
-      links: [
-        portLink({ port: getPort() }),
-      ],
+      links: [portLink({ port: getPort() })],
     });
 
     // Now you can call procedures with full type safety!
@@ -91,14 +83,13 @@ This guide walks through a minimal setup where a **renderer** process calls proc
 
 ## What Just Happened?
 
-1. `createPortBroker()` creates a broker that can generate MessagePort pairs.
-2. `broker.createRendererPort(webContents)` creates a `MessageChannelMain`, sends one port to the renderer via `postMessage`, and returns the other port (`serverPort`).
-3. `exposePortReceiver()` in the preload script listens for the incoming port and exposes a `getPort()` function to the renderer via `contextBridge`.
-4. In the renderer, `getPort()` returns a `Promise<MessagePort>` that resolves once the main process sends the port.
-5. `portLink({ port })` creates a tRPC link that sends requests and receives responses over the MessagePort.
+1. `createWindowMessagePortHandler()` watches each window for `did-finish-load`, creates a new MessagePort pair, and attaches the main-process side to your router.
+2. `exposePortReceiver()` in the preload script receives the transferred port and forwards it into the renderer's main world.
+3. In the renderer, `getPort()` resolves the transferred port and `portLink({ port })` plugs it into a standard tRPC client.
+4. Reloads are handled by the main-process helper, so your application code does not need to manually recreate handlers.
 
 <Aside type="tip">
-`portLink` accepts both a `MessagePort` and a `Promise<MessagePort>`, so you can pass `getPort()` directly without awaiting it.
+The low-level exports are still available if you want custom lifecycle control or direct MessagePort access.
 </Aside>
 
 ## Next Steps
