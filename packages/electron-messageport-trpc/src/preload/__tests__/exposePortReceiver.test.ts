@@ -28,12 +28,11 @@ describe('exposePortReceiver', () => {
     const { port1, port2 } = new MessageChannel();
 
     exposePortReceiver();
-    const handler = electronMocks.ipcRenderer.on.mock.calls[0][1] as (
-      event: { ports: MessagePort[] },
-    ) => void;
-    const bridge = electronMocks.contextBridge.exposeInMainWorld.mock.calls[0][1] as
-      | { requestPort(): void }
-      | undefined;
+    const handler = electronMocks.ipcRenderer.on.mock.calls[0][1] as (event: {
+      ports: MessagePort[];
+    }) => void;
+    const bridge = electronMocks.contextBridge.exposeInMainWorld.mock
+      .calls[0][1] as { requestPort(): void } | undefined;
 
     handler({ ports: [port1] });
     expect(postMessage).not.toHaveBeenCalled();
@@ -57,12 +56,11 @@ describe('exposePortReceiver', () => {
     const { port1, port2 } = new MessageChannel();
 
     exposePortReceiver();
-    const handler = electronMocks.ipcRenderer.on.mock.calls[0][1] as (
-      event: { ports: MessagePort[] },
-    ) => void;
-    const bridge = electronMocks.contextBridge.exposeInMainWorld.mock.calls[0][1] as
-      | { requestPort(): void }
-      | undefined;
+    const handler = electronMocks.ipcRenderer.on.mock.calls[0][1] as (event: {
+      ports: MessagePort[];
+    }) => void;
+    const bridge = electronMocks.contextBridge.exposeInMainWorld.mock
+      .calls[0][1] as { requestPort(): void } | undefined;
 
     bridge?.requestPort();
     handler({ ports: [port1] });
