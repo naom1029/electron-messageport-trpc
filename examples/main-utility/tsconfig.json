@@ -1,0 +1,9 @@
+{
+  "extends": "../../packages/electron-messageport-trpc/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "types": ["vite/client"]
+  },
+  "include": ["src", "electron", "preload", "utility", "vite.config.ts"]
+}

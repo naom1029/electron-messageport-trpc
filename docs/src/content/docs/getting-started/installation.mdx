@@ -40,7 +40,7 @@ The library ships with four entry points, each targeting a specific Electron pro
 | `electron-messageport-trpc/main` | Main | Port broker and request handler |
 | `electron-messageport-trpc/preload` | Preload | Expose port receiver to renderer |
 | `electron-messageport-trpc/renderer` | Renderer | tRPC link and port getter |
-| `electron-messageport-trpc/utility` | Utility | Handler for utility processes (planned) |
+| `electron-messageport-trpc/utility` | Utility | Attach a tRPC handler to `parentPort` in a utility process |
 
 <Aside type="caution">
 Make sure your bundler configuration resolves these entry points correctly. If you use Electron Forge or electron-vite, the default configuration should work out of the box.

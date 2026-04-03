@@ -8,6 +8,24 @@
       "entry": ["electron/main.ts", "preload/index.ts"],
       "project": ["electron/**/*.ts", "preload/**/*.ts", "src/**/*.{ts,tsx}"]
     },
+    "examples/main-utility": {
+      "entry": ["electron/main.ts", "preload/index.ts", "utility/worker.ts"],
+      "project": [
+        "electron/**/*.ts",
+        "preload/**/*.ts",
+        "src/**/*.{ts,tsx}",
+        "utility/**/*.ts"
+      ]
+    },
+    "examples/renderer-utility": {
+      "entry": ["electron/main.ts", "preload/index.ts", "utility/worker.ts"],
+      "project": [
+        "electron/**/*.ts",
+        "preload/**/*.ts",
+        "src/**/*.{ts,tsx}",
+        "utility/**/*.ts"
+      ]
+    },
     "docs": {}
   }
 }
