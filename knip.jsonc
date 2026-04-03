@@ -6,11 +6,7 @@
     },
     "examples/basic": {
       "entry": ["electron/main.ts", "preload/index.ts"],
-      "project": [
-        "electron/**/*.ts",
-        "preload/**/*.ts",
-        "src/**/*.{ts,tsx}"
-      ]
+      "project": ["electron/**/*.ts", "preload/**/*.ts", "src/**/*.{ts,tsx}"]
     },
     "docs": {}
   }
