@@ -8,17 +8,7 @@ import { appRouter } from './router';
 
 const broker = createPortBroker();
 
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 800,
-    height: 600,
-    webPreferences: {
-      preload: path.join(__dirname, 'index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-
+function attachRouter(win: BrowserWindow) {
   let handler: ReturnType<typeof createPortHandler> | null = null;
 
   win.webContents.on('did-finish-load', () => {
@@ -32,6 +22,20 @@ function createWindow() {
   });
 
   win.on('closed', () => handler?.destroy());
+}
+
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      preload: path.join(__dirname, 'index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  attachRouter(win);
 
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
