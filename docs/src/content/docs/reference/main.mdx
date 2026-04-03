@@ -6,8 +6,67 @@ description: API reference for electron-messageport-trpc/main
 import { Aside } from '@astrojs/starlight/components';
 
 ```typescript
-import { createPortBroker, createPortHandler } from 'electron-messageport-trpc/main';
+import {
+  createWindowMessagePortHandler,
+  createPortBroker,
+  createPortHandler,
+} from 'electron-messageport-trpc/main';
 ```
+
+## `createWindowMessagePortHandler(opts)`
+
+Creates and maintains MessagePort-backed tRPC handlers for one or more Electron windows.
+
+### Parameters
+
+```typescript
+interface CreateWindowMessagePortHandlerOptions<TRouter extends AnyRouter> {
+  router: TRouter;
+  windows: readonly BrowserWindow[];
+  createContext?: (opts: { window: BrowserWindow }) => Promise<unknown>;
+}
+```
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `router` | `AnyRouter` | Yes | Your tRPC router instance |
+| `windows` | `readonly BrowserWindow[]` | Yes | Windows that should receive a renderer-side port |
+| `createContext` | `(opts: { window: BrowserWindow }) => Promise<unknown>` | No | Factory invoked for each request with the matching window |
+
+### Returns
+
+A `WindowMessagePortHandler` object.
+
+### `WindowMessagePortHandler`
+
+#### `handler.destroy()`
+
+Stops all managed window handlers and removes their Electron event listeners.
+
+### Example
+
+```typescript
+import { createWindowMessagePortHandler } from 'electron-messageport-trpc/main';
+import { appRouter } from './router';
+
+app.whenReady().then(() => {
+  const win = new BrowserWindow({ /* ... */ });
+
+  createWindowMessagePortHandler({
+    router: appRouter,
+    windows: [win],
+    createContext: async ({ window }) => ({
+      windowId: window.id,
+    }),
+  });
+});
+```
+
+<Aside type="tip">
+This is the recommended main-process API. It recreates the MessagePort after renderer reloads, so application code does not need to manage `did-finish-load` or handler teardown.
+</Aside>
+
+---
 
 ## `createPortBroker()`
 
