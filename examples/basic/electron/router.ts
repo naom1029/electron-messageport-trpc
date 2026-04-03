@@ -1,5 +1,5 @@
-import { initTRPC } from '@trpc/server';
 import { EventEmitter } from 'node:events';
+import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
 
 const t = initTRPC.create();
@@ -57,7 +57,10 @@ export const appRouter = t.router({
     try {
       while (!opts.signal?.aborted) {
         if (queue.length > 0) {
-          yield queue.shift()!;
+          const nextTodo = queue.shift();
+          if (nextTodo) {
+            yield nextTodo;
+          }
         } else {
           await new Promise<void>((r) => {
             resolve = r;

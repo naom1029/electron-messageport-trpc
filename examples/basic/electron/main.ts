@@ -1,9 +1,9 @@
-import { BrowserWindow, app } from 'electron';
+import path from 'node:path';
+import { app, BrowserWindow } from 'electron';
 import {
   createPortBroker,
   createPortHandler,
 } from 'electron-messageport-trpc/main';
-import path from 'node:path';
 import { appRouter } from './router';
 
 const broker = createPortBroker();

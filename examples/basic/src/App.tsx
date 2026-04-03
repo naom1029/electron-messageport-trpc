@@ -57,14 +57,11 @@ function MutationDemo() {
     setTodos(updated);
   }, [text]);
 
-  const handleToggle = useCallback(
-    async (id: number) => {
-      await trpc.toggleTodo.mutate({ id });
-      const updated = await trpc.listTodos.query();
-      setTodos(updated);
-    },
-    [],
-  );
+  const handleToggle = useCallback(async (id: number) => {
+    await trpc.toggleTodo.mutate({ id });
+    const updated = await trpc.listTodos.query();
+    setTodos(updated);
+  }, []);
 
   return (
     <section>
@@ -80,15 +77,17 @@ function MutationDemo() {
       </button>
       <ul>
         {todos.map((todo) => (
-          <li
-            key={todo.id}
-            onClick={() => handleToggle(todo.id)}
-            style={{
-              textDecoration: todo.done ? 'line-through' : 'none',
-              cursor: 'pointer',
-            }}
-          >
-            {todo.text}
+          <li key={todo.id}>
+            <button
+              type="button"
+              onClick={() => handleToggle(todo.id)}
+              style={{
+                textDecoration: todo.done ? 'line-through' : 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {todo.text}
+            </button>
           </li>
         ))}
       </ul>
@@ -98,7 +97,7 @@ function MutationDemo() {
 
 function SubscriptionDemo() {
   const [time, setTime] = useState('');
-  const [newTodos, setNewTodos] = useState<string[]>([]);
+  const [newTodos, setNewTodos] = useState<{ id: number; text: string }[]>([]);
   const timeSubRef = useRef<{ unsubscribe: () => void } | null>(null);
   const todoSubRef = useRef<{ unsubscribe: () => void } | null>(null);
 
@@ -111,7 +110,7 @@ function SubscriptionDemo() {
 
     todoSubRef.current = trpc.onTodoAdded.subscribe(undefined, {
       onData(todo) {
-        setNewTodos((prev) => [...prev, `[${todo.id}] ${todo.text}`]);
+        setNewTodos((prev) => [...prev, { id: todo.id, text: todo.text }]);
       },
     });
 
@@ -133,8 +132,10 @@ function SubscriptionDemo() {
           <p>Add a todo above to see it appear here in real-time</p>
         ) : (
           <ul>
-            {newTodos.map((t, i) => (
-              <li key={i}>{t}</li>
+            {newTodos.map((todo) => (
+              <li key={todo.id}>
+                [{todo.id}] {todo.text}
+              </li>
             ))}
           </ul>
         )}
