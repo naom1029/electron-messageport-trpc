@@ -60,11 +60,6 @@ export function createWindowMessagePortHandler<
 
     window.webContents.on('did-finish-load', connectWindow);
     window.on('closed', destroyWindowHandler);
-
-    if (window.webContents.isLoadingMainFrame?.() === false) {
-      connectWindow();
-    }
-
     return () => {
       window.webContents.off('did-finish-load', connectWindow);
       window.off('closed', destroyWindowHandler);
