@@ -1,7 +1,7 @@
 import { MessageChannelMain } from 'electron';
 import { PORT_INIT_CHANNEL } from '../shared/constants';
 
-interface WebContentsLike {
+export interface WebContentsLike {
   postMessage(channel: string, message: unknown, transfer?: unknown[]): void;
 }
 
