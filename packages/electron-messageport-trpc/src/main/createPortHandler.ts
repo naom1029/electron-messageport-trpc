@@ -11,7 +11,7 @@ import type {
   TRPCPortRequest,
 } from '../shared/protocol';
 
-interface MessagePortLike {
+export interface MessagePortLike {
   on(event: 'message', listener: (event: { data: unknown }) => void): void;
   on(event: 'close', listener: () => void): void;
   off(event: string, listener: (...args: unknown[]) => void): void;

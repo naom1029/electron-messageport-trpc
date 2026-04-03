@@ -1,11 +1,11 @@
 import type { AnyRouter } from '@trpc/server';
-import type { PortHandler } from '../main/createPortHandler';
+import type { MessagePortLike, PortHandler } from '../main/createPortHandler';
 import { createPortHandler } from '../main/createPortHandler';
 
-interface ParentPortLike {
+export interface ParentPortLike {
   on(
     event: 'message',
-    listener: (event: { data: unknown; ports: unknown[] }) => void,
+    listener: (event: { data: unknown; ports: MessagePortLike[] }) => void,
   ): void;
 }
 
@@ -27,7 +27,7 @@ export function createParentPortHandler<TRouter extends AnyRouter>(
 
     for (const port of ports) {
       const handler = createPortHandler({
-        port: port as any,
+        port,
         router,
         createContext,
       });

@@ -13,13 +13,14 @@ vi.mock('electron', () => ({
   },
 }));
 
+import type { WebContentsLike } from '../portBroker';
 import { createPortBroker } from '../portBroker';
 
-function createMockWebContents() {
+function createMockWebContents(): WebContentsLike & {
+  postMessage: ReturnType<typeof vi.fn>;
+} {
   return {
     postMessage: vi.fn(),
-    on: vi.fn(),
-    isDestroyed: vi.fn(() => false),
   };
 }
 
@@ -30,7 +31,7 @@ describe('portBroker', () => {
     const webContents = createMockWebContents();
 
     // Act
-    const result = broker.createRendererPort(webContents as any);
+    const result = broker.createRendererPort(webContents);
 
     // Assert
     expect(webContents.postMessage).toHaveBeenCalledOnce();
@@ -48,7 +49,7 @@ describe('portBroker', () => {
     const webContents = createMockWebContents();
 
     // Act
-    const { serverPort } = broker.createRendererPort(webContents as any);
+    const { serverPort } = broker.createRendererPort(webContents);
 
     // Assert
     expect(typeof serverPort.on).toBe('function');
@@ -63,7 +64,7 @@ describe('portBroker', () => {
     const webContents = createMockWebContents();
 
     // Act
-    broker.createRendererPort(webContents as any);
+    broker.createRendererPort(webContents);
 
     // Assert
     const channel = webContents.postMessage.mock.calls[0][0];

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { portLink } from '../../renderer/portLink';
 import { MockMessagePortMain } from '../../shared/__tests__/mockPort';
 import { MockRendererPort } from '../../shared/__tests__/mockRendererPort';
+import type { ParentPortLike } from '../parentPortHandler';
 import { createParentPortHandler } from '../parentPortHandler';
 
 /**
@@ -74,7 +75,7 @@ describe('parentPortHandler', () => {
 
     createParentPortHandler({
       router,
-      parentPort: mockParentPort as any,
+      parentPort: mockParentPort as ParentPortLike,
     });
 
     // Simulate main sending a port to the utility process
@@ -102,7 +103,7 @@ describe('parentPortHandler', () => {
 
     createParentPortHandler({
       router,
-      parentPort: mockParentPort as any,
+      parentPort: mockParentPort as ParentPortLike,
     });
 
     mockParentPort.emit('message', {
@@ -129,7 +130,7 @@ describe('parentPortHandler', () => {
 
     createParentPortHandler({
       router,
-      parentPort: mockParentPort as any,
+      parentPort: mockParentPort as ParentPortLike,
     });
 
     mockParentPort.emit('message', {
@@ -175,7 +176,7 @@ describe('parentPortHandler', () => {
 
     createParentPortHandler({
       router,
-      parentPort: mockParentPort as any,
+      parentPort: mockParentPort as ParentPortLike,
     });
 
     // Send two separate ports (e.g., from two different renderers)
@@ -212,7 +213,7 @@ describe('parentPortHandler', () => {
 
     createParentPortHandler({
       router,
-      parentPort: mockParentPort as any,
+      parentPort: mockParentPort as ParentPortLike,
       createContext: async () => ({ source: 'utility' }),
     });
 
