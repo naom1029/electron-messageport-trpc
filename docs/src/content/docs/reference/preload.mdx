@@ -16,8 +16,8 @@ Sets up the preload script to receive a MessagePort from the main process and ex
 ### What It Does
 
 1. Listens on the internal IPC channel for a port sent by `createRendererPort()`.
-2. Uses `contextBridge.exposeInMainWorld()` to expose a `window.electronTRPCPort` object with a `getPort()` method.
-3. `getPort()` returns a `Promise<MessagePort>` that resolves when the main process sends the port.
+2. Uses `contextBridge.exposeInMainWorld()` to expose a `window.electronTRPCPort` object with a `requestPort()` method.
+3. When the renderer requests a port, forwards the transferred MessagePort into the renderer's main world via `window.postMessage()`.
 
 ### Parameters
 
@@ -45,11 +45,11 @@ This function must be called in the preload script, not in the main process or r
 After calling `exposePortReceiver()`, the renderer has access to:
 
 ```typescript
-window.electronTRPCPort.getPort(): Promise<MessagePort>
+window.electronTRPCPort.requestPort(): void
 ```
 
 You do not need to use this directly -- the `getPort()` function from `electron-messageport-trpc/renderer` wraps it for you.
 
 ### Security
 
-The function uses `contextBridge.exposeInMainWorld()` to safely expose the port getter. This respects Electron's context isolation. No raw Electron APIs are leaked to the renderer.
+The function uses `contextBridge.exposeInMainWorld()` only for the request trigger. The actual `MessagePort` is transferred with `window.postMessage()`, so the renderer still receives a real browser `MessagePort`.
