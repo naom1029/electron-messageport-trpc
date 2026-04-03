@@ -10,7 +10,7 @@ Type-safe IPC for Electron using MessagePort and tRPC v11.
 
 - **MessagePort-based transport** -- uses MessagePort instead of ipcMain/ipcRenderer
 - **tRPC v11 native** -- async iterables for subscriptions
-- **Flexible topology** -- renderer-to-main, renderer-to-renderer, main-to-utility
+- **Flexible topology** -- renderer-to-main, main-to-utility, renderer-to-utility, and brokered renderer-to-renderer
 - **Structured Clone serialization** -- native Date, Map, Set, ArrayBuffer support
 - **Full TypeScript support**
 - **4 entry points** -- `/main`, `/renderer`, `/preload`, `/utility`
@@ -39,16 +39,11 @@ pnpm add @trpc/server @trpc/client
 ### Main Process
 
 ```typescript
-import { createPortBroker, createPortHandler } from 'electron-messageport-trpc/main';
+import { createWindowMessagePortHandler } from 'electron-messageport-trpc/main';
 import { appRouter } from './router';
 
-const broker = createPortBroker();
 const win = new BrowserWindow({ /* ... */ });
-
-const { serverPort } = broker.createRendererPort(win.webContents);
-const handler = createPortHandler({ port: serverPort, router: appRouter });
-
-win.on('closed', () => handler.destroy());
+createWindowMessagePortHandler({ router: appRouter, windows: [win] });
 ```
 
 ### Preload

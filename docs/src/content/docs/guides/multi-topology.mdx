@@ -65,11 +65,7 @@ In this pattern, the main process still hosts the tRPC handler. For true rendere
 
 Electron's [utility process](https://www.electronjs.org/docs/latest/api/utility-process) runs in a separate Node.js thread. You can connect it via MessagePort for offloading heavy computation.
 
-<Aside type="caution">
-Utility process support is planned but not yet implemented. The `electron-messageport-trpc/utility` entry point currently exports nothing. The API below describes the planned interface.
-</Aside>
-
-### Planned API
+### Utility Worker
 
 ```typescript
 // utility-process.ts (runs in a utility process)
@@ -78,20 +74,47 @@ import { utilityRouter } from './router';
 
 createParentPortHandler({
   router: utilityRouter,
+  parentPort: process.parentPort,
 });
 ```
 
+### Main to Utility
+
 ```typescript
 // main process
+import { createTRPCClient } from '@trpc/client';
+import { MessageChannelMain, utilityProcess } from 'electron';
+import { mainPortLink } from 'electron-messageport-trpc/main';
+
+const child = utilityProcess.fork('utility-process.js');
+const { port1, port2 } = new MessageChannelMain();
+
+child.postMessage({ type: 'connect' }, [port1]);
+
+const client = createTRPCClient({
+  links: [mainPortLink({ port: port2 })],
+});
+```
+
+### Renderer to Utility
+
+```typescript
+// main process broker
+import { createPortBroker } from 'electron-messageport-trpc/main';
 import { utilityProcess } from 'electron';
 
 const child = utilityProcess.fork('utility-process.js');
+const broker = createPortBroker();
 
-// The utility process communicates with its parent (main) via parentPort
-// The main process can then broker connections to renderers
+win.webContents.on('did-finish-load', () => {
+  const { serverPort } = broker.createRendererPort(win.webContents);
+  child.postMessage({ type: 'connect' }, [serverPort]);
+});
 ```
 
-### Planned Architecture
+This keeps the main process out of the request path. It only creates and transfers the port pair.
+
+### Architecture
 
 ```
 ┌─────────────┐   MessagePort   ┌──────────────┐   parentPort   ┌─────────────────┐

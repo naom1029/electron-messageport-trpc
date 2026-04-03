@@ -26,7 +26,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     MessagePort uses the Structured Clone algorithm -- `Date`, `Map`, `Set`, and `ArrayBuffer` are transferred natively without JSON serialization.
   </Card>
   <Card title="Flexible Topology" icon="random">
-    Go beyond the star topology of ipcMain/ipcRenderer. Connect renderers directly, or offload work to utility processes.
+    Go beyond the star topology of ipcMain/ipcRenderer. Keep standard renderer-to-main flows, or connect main and renderer clients to utility processes over MessagePort.
   </Card>
   <Card title="tRPC v11 Subscriptions" icon="list-format">
     Real-time streaming via async iterables. Subscribe from the renderer and receive live updates from the main process.

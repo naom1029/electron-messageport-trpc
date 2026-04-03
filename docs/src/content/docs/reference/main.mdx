@@ -7,6 +7,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 ```typescript
 import {
+  mainPortLink,
   createWindowMessagePortHandler,
   createPortBroker,
   createPortHandler,
@@ -65,6 +66,41 @@ app.whenReady().then(() => {
 <Aside type="tip">
 This is the recommended main-process API. It recreates the MessagePort after renderer reloads, so application code does not need to manage `did-finish-load` or handler teardown.
 </Aside>
+
+---
+
+## `mainPortLink(opts)`
+
+Creates a tRPC client link for `MessagePortMain`-compatible ports in the main process. Use this when the main process is the tRPC client, such as calling a utility process over `MessageChannelMain`.
+
+### Parameters
+
+```typescript
+interface MainPortLinkOptions {
+  port: MessagePortMain | Promise<MessagePortMain>;
+}
+```
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `port` | `MessagePortMain \| Promise<MessagePortMain>` | Yes | The client-side main-process port |
+
+### Example
+
+```typescript
+import { createTRPCClient } from '@trpc/client';
+import { MessageChannelMain, utilityProcess } from 'electron';
+import { mainPortLink } from 'electron-messageport-trpc/main';
+
+const child = utilityProcess.fork('utility-worker.js');
+const { port1, port2 } = new MessageChannelMain();
+
+child.postMessage({ type: 'connect' }, [port1]);
+
+const client = createTRPCClient({
+  links: [mainPortLink({ port: port2 })],
+});
+```
 
 ---
 
