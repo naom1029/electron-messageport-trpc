@@ -15,7 +15,6 @@ Use `t.procedure.subscription()` to define a subscription that yields values ove
 // src/main/router.ts
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
-import { on } from 'events';
 
 const t = initTRPC.create();
 
@@ -52,12 +51,18 @@ const trpc = createTRPCClient<AppRouter>({
 const subscription = trpc.onTimer.subscribe(
   { intervalMs: 1000 },
   {
+    onStarted() {
+      console.log('Subscription started');
+    },
     onData(value) {
       // value is typed as { count: number; timestamp: Date }
       console.log(`Tick #${value.count} at ${value.timestamp}`);
     },
     onError(err) {
       console.error('Subscription error:', err);
+    },
+    onStopped() {
+      console.log('Subscription stopped by the server');
     },
     onComplete() {
       console.log('Subscription ended');
@@ -73,10 +78,11 @@ subscription.unsubscribe();
 
 1. The client sends a `{ kind: 'request', method: 'subscription', ... }` message.
 2. The server calls the procedure and receives an async iterable.
-3. For each yielded value, the server sends `{ kind: 'result', type: 'data', data }`.
-4. When the client calls `unsubscribe()`, it sends `{ kind: 'subscription.stop', id }`.
-5. The server aborts the `AbortController`, which signals the async generator to stop.
-6. If the iterable completes naturally, the server sends `{ kind: 'result', type: 'stopped' }`.
+3. The server sends `{ kind: 'result', type: 'started' }`.
+4. For each yielded value, the server sends `{ kind: 'result', type: 'data', data }`.
+5. When the client calls `unsubscribe()`, it sends `{ kind: 'subscription.stop', id }`.
+6. The server aborts the `AbortController`, which signals the async generator to stop.
+7. If the iterable completes naturally, the server sends `{ kind: 'result', type: 'stopped' }`.
 
 <Aside type="note">
 Because MessagePort uses the Structured Clone algorithm, `Date` objects in the subscription data are transferred as real `Date` instances -- no manual parsing needed.

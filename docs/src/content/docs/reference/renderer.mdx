@@ -56,7 +56,7 @@ Since `portLink` accepts a `Promise<MessagePort>`, you can pass `getPort()` dire
 2. Each request is assigned a unique numeric ID.
 3. Requests are sent as `ClientMessage` objects via `port.postMessage()`.
 4. Responses are matched by ID and dispatched to the appropriate observer.
-5. For subscriptions, the observer receives multiple `onData` callbacks until `onComplete` or `onError`.
+5. For subscriptions, the observer receives `onStarted`, multiple `onData` callbacks, `onStopped` when the server-side iterable completes, and finally `onComplete`.
 6. When a subscription is unsubscribed, a `subscription.stop` message is sent.
 
 ---

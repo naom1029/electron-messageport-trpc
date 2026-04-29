@@ -22,10 +22,18 @@ export interface PortLinkOptions {
   port: RendererPortLike | Promise<RendererPortLike>;
 }
 
+interface ResultData {
+  type: 'data';
+  data: unknown;
+  id?: string;
+}
+
 interface PendingRequest {
-  onData(value: unknown): void;
+  onData(value: ResultData): void;
+  onStarted(): void;
   onError(error: unknown): void;
   onComplete(): void;
+  onStopped(): void;
   type: 'query' | 'mutation' | 'subscription';
 }
 
@@ -48,13 +56,20 @@ export function portLink<TRouter extends AnyRouter>(
         pending.delete(msg.id);
         req.onError(TRPCClientError.from({ error: msg.error }));
       } else if (msg.kind === 'result' && msg.type === 'data') {
-        req.onData(msg.data);
+        req.onData(
+          msg.eventId
+            ? { type: 'data', id: msg.eventId, data: msg.data }
+            : { type: 'data', data: msg.data },
+        );
         if (req.type !== 'subscription') {
           pending.delete(msg.id);
           req.onComplete();
         }
+      } else if (msg.kind === 'result' && msg.type === 'started') {
+        req.onStarted();
       } else if (msg.kind === 'result' && msg.type === 'stopped') {
         pending.delete(msg.id);
+        req.onStopped();
         req.onComplete();
       }
     }
@@ -77,10 +92,16 @@ export function portLink<TRouter extends AnyRouter>(
         pending.set(id, {
           type: op.type,
           onData(data) {
-            observer.next({ result: { type: 'data', data } });
+            observer.next({ result: data });
+          },
+          onStarted() {
+            observer.next({ result: { type: 'started' } });
           },
           onComplete() {
             observer.complete();
+          },
+          onStopped() {
+            observer.next({ result: { type: 'stopped' } });
           },
           onError(error) {
             observer.error(

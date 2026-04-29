@@ -65,6 +65,7 @@ interface TRPCPortResultData {
   id: number;
   type: 'data';
   data: unknown;
+  eventId?: string;
 }
 ```
 
@@ -74,10 +75,31 @@ interface TRPCPortResultData {
 | `id` | `number` | The request ID this result belongs to |
 | `type` | `'data'` | Result type discriminator |
 | `data` | `unknown` | The procedure result, transferred via Structured Clone |
+| `eventId` | `string \| undefined` | The tracked event ID for resumable subscription data |
 
 For **queries and mutations**, a single `data` result is sent, and the request is complete.
 
 For **subscriptions**, multiple `data` results may be sent over time.
+
+When a subscription yields `tracked(id, data)`, the protocol sends `eventId: id` and `data: { id, data }`, matching tRPC v11's tracked subscription output shape.
+
+### Result (Started)
+
+Sent after a subscription procedure has started successfully.
+
+```typescript
+interface TRPCPortResultStarted {
+  kind: 'result';
+  id: number;
+  type: 'started';
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | `'result'` | Message discriminator |
+| `id` | `number` | The subscription ID |
+| `type` | `'started'` | Indicates the subscription has started |
 
 ### Result (Stopped)
 
@@ -150,6 +172,9 @@ Client                          Server
   |------------------------------>|
   |                               |
   |  { kind: 'result',           |
+  |    id: 1, type: 'started' }  |
+  |<------------------------------|
+  |  { kind: 'result',           |
   |    id: 1, type: 'data', ..}  |
   |<------------------------------|
   |  { kind: 'result',           |
@@ -159,4 +184,10 @@ Client                          Server
   |  { kind: 'subscription.stop',|
   |    id: 1 }                   |
   |------------------------------>|
+  |                               |
+  |  // Or, if the async iterable |
+  |  // completes naturally:      |
+  |  { kind: 'result',           |
+  |    id: 1, type: 'stopped' }  |
+  |<------------------------------|
 ```

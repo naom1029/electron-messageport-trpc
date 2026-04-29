@@ -4,6 +4,7 @@ import {
   getErrorShape,
   getTRPCErrorFromUnknown,
   isAsyncIterable,
+  isTrackedEnvelope,
 } from '@trpc/server/unstable-core-do-not-import';
 import type {
   ClientMessage,
@@ -28,6 +29,22 @@ export interface CreatePortHandlerOptions<TRouter extends AnyRouter> {
 
 export interface PortHandler {
   destroy(): void;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return !!value && !Array.isArray(value) && typeof value === 'object';
+}
+
+function inputWithLastEventId(input: unknown, lastEventId: string | undefined) {
+  if (lastEventId === undefined) {
+    return input;
+  }
+
+  if (isObject(input)) {
+    return { ...input, lastEventId };
+  }
+
+  return input ?? { lastEventId };
 }
 
 export function createPortHandler<TRouter extends AnyRouter>(
@@ -79,7 +96,18 @@ export function createPortHandler<TRouter extends AnyRouter>(
     try {
       for await (const value of iterable) {
         if (signal.aborted) break;
-        send({ kind: 'result', id, type: 'data', data: value });
+        if (isTrackedEnvelope(value)) {
+          const [eventId, data] = value;
+          send({
+            kind: 'result',
+            id,
+            type: 'data',
+            eventId,
+            data: { id: eventId, data },
+          });
+        } else {
+          send({ kind: 'result', id, type: 'data', data: value });
+        }
       }
       if (!signal.aborted) {
         send({ kind: 'result', id, type: 'stopped' });
@@ -94,7 +122,8 @@ export function createPortHandler<TRouter extends AnyRouter>(
   }
 
   async function handleRequest(msg: TRPCPortRequest): Promise<void> {
-    const { id, method, path, input } = msg;
+    const { id, method, path } = msg;
+    const input = inputWithLastEventId(msg.input, msg.lastEventId);
 
     try {
       const ctx = (await opts.createContext?.()) ?? {};
@@ -120,8 +149,13 @@ export function createPortHandler<TRouter extends AnyRouter>(
           throw new Error('Subscription request is missing an abort signal');
         }
 
+        send({ kind: 'result', id, type: 'started' });
         iterateSubscription(id, result, signal, method, path, input);
         return;
+      }
+
+      if (method === 'subscription') {
+        throw new Error('Subscription procedure must return an async iterable');
       }
 
       send({ kind: 'result', id, type: 'data', data: result });
