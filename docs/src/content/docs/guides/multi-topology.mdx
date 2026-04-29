@@ -1,71 +1,11 @@
 ---
-title: Multi-Topology
-description: Renderer-to-renderer and utility process communication patterns
+title: Utility Process Topologies
+description: Utility process communication patterns
 ---
-
-import { Aside } from '@astrojs/starlight/components';
-
-One of the key advantages of MessagePort over `ipcMain`/`ipcRenderer` is support for **flexible communication topologies**. The main process does not need to be a bottleneck.
-
-## Renderer-to-Renderer Communication
-
-Two renderer processes can communicate directly by having the main process broker a MessagePort pair between them.
-
-### Main Process (Broker)
-
-```typescript
-import { BrowserWindow } from 'electron';
-import { createPortBroker, createPortHandler } from 'electron-messageport-trpc/main';
-import { appRouter } from './router';
-
-const broker = createPortBroker();
-
-// Create two windows
-const winA = new BrowserWindow({ /* ... */ });
-const winB = new BrowserWindow({ /* ... */ });
-
-// When both windows are ready, create a port pair
-// Window A acts as the "server", Window B as the "client"
-winA.webContents.on('did-finish-load', () => {
-  winB.webContents.on('did-finish-load', () => {
-    // Create a port for window B (client side)
-    const { serverPort } = broker.createRendererPort(winB.webContents);
-
-    // Attach the tRPC handler to the server port
-    // This handler runs in the main process but could also be
-    // attached in window A's process
-    createPortHandler({
-      port: serverPort,
-      router: appRouter,
-    });
-  });
-});
-```
-
-<Aside type="note">
-In this pattern, the main process still hosts the tRPC handler. For true renderer-to-renderer communication without the main process handling requests, you would need to pass both ports to the respective renderers -- this requires custom port forwarding logic.
-</Aside>
-
-### Architecture Diagram
-
-```
-┌─────────────┐                    ┌─────────────┐
-│  Renderer A  │                    │  Renderer B  │
-│  (server)    │                    │  (client)    │
-└──────┬──────┘                    └──────┬──────┘
-       │           Main Process           │
-       │    ┌─────────────────────┐       │
-       │    │  Port Broker        │       │
-       │    │  MessageChannelMain │       │
-       └────┤  port1 ←──→ port2  ├───────┘
-            └─────────────────────┘
-```
-
-## Utility Process Communication
 
 Electron's [utility process](https://www.electronjs.org/docs/latest/api/utility-process) runs in a separate Node.js thread. You can connect it via MessagePort for offloading heavy computation.
 
-### Utility Worker
+## Utility Worker
 
 ```typescript
 // utility-process.ts (runs in a utility process)
@@ -78,7 +18,7 @@ createParentPortHandler({
 });
 ```
 
-### Main to Utility
+## Main to Utility
 
 ```typescript
 // main process
@@ -96,7 +36,7 @@ const client = createTRPCClient({
 });
 ```
 
-### Renderer to Utility
+## Renderer to Utility
 
 ```typescript
 // main process broker
@@ -114,12 +54,10 @@ win.webContents.on('did-finish-load', () => {
 
 This keeps the main process out of the request path. It only creates and transfers the port pair.
 
-### Architecture
+## Architecture
 
-```
-┌─────────────┐   MessagePort   ┌──────────────┐   parentPort   ┌─────────────────┐
-│   Renderer   │<===============>│  Main Process │<=============>│ Utility Process  │
-└─────────────┘                 └──────────────┘                └─────────────────┘
+```text
+Renderer <== MessagePort ==> Main Process <== parentPort ==> Utility Process
 ```
 
 ## Choosing a Topology
@@ -127,6 +65,5 @@ This keeps the main process out of the request path. It only creates and transfe
 | Topology | Use Case | Pros | Cons |
 |---|---|---|---|
 | Renderer to Main | Standard RPC, DB access, native APIs | Simple setup | Main process is the bottleneck |
-| Renderer to Renderer | Shared state, collaboration features | Direct communication | Requires brokering |
 | Main to Utility | Heavy computation, background tasks | Offloads main thread | Extra process overhead |
-| Renderer to Utility | Direct offloading (via broker) | Best performance | Most complex setup |
+| Renderer to Utility | Direct offloading via broker | Keeps main out of the request path | Most complex setup |
