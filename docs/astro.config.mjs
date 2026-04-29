@@ -2,6 +2,8 @@ import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
+  site: 'https://naom1029.github.io',
+  base: '/electron-messageport-trpc',
   integrations: [
     starlight({
       title: 'electron-messageport-trpc',
