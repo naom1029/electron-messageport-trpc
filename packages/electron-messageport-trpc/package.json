@@ -2,6 +2,7 @@
   "name": "electron-messageport-trpc",
   "version": "0.2.0",
   "description": "MessagePort-based tRPC v11 transport for Electron",
+  "type": "module",
   "license": "MIT",
   "author": "naom1029",
   "repository": {
@@ -28,32 +29,43 @@
   },
   "exports": {
     "./main": {
-      "default": "./dist/main.mjs",
-      "types": "./dist/main.d.ts"
+      "types": "./dist/main/index.d.ts",
+      "import": "./dist/main.mjs",
+      "default": "./dist/main.mjs"
     },
     "./renderer": {
-      "default": "./dist/renderer.mjs",
-      "types": "./dist/renderer.d.ts"
+      "types": "./dist/renderer/index.d.ts",
+      "import": "./dist/renderer.mjs",
+      "default": "./dist/renderer.mjs"
     },
     "./preload": {
-      "default": "./dist/preload.mjs",
-      "types": "./dist/preload.d.ts"
+      "types": "./dist/preload/index.d.ts",
+      "import": "./dist/preload.mjs",
+      "default": "./dist/preload.mjs"
     },
     "./utility": {
-      "default": "./dist/utility.mjs",
-      "types": "./dist/utility.d.ts"
+      "types": "./dist/utility/index.d.ts",
+      "import": "./dist/utility.mjs",
+      "default": "./dist/utility.mjs"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc --noEmit && vite build -c src/main/vite.config.ts && vite build -c src/renderer/vite.config.ts && vite build -c src/preload/vite.config.ts && vite build -c src/utility/vite.config.ts",
-    "build:watch": "pnpm run build:watch:main & pnpm run build:watch:renderer & pnpm run build:watch:preload & pnpm run build:watch:utility & tsc --noEmit --watch --preserveWatchOutput",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "typecheck": "tsc --noEmit",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc --noEmit && tsc -p tsconfig.build.json && vite build -c src/main/vite.config.ts && vite build -c src/renderer/vite.config.ts && vite build -c src/preload/vite.config.ts && vite build -c src/utility/vite.config.ts",
+    "build:watch": "npm run build:watch:main & npm run build:watch:renderer & npm run build:watch:preload & npm run build:watch:utility & tsc --noEmit --watch --preserveWatchOutput",
     "build:watch:main": "vite build -c src/main/vite.config.ts --watch",
     "build:watch:renderer": "vite build -c src/renderer/vite.config.ts --watch",
     "build:watch:preload": "vite build -c src/preload/vite.config.ts --watch",
     "build:watch:utility": "vite build -c src/utility/vite.config.ts --watch",
+    "prepack": "npm run build",
     "test": "vitest run -c vitest.config.ts",
     "test:watch": "vitest -c vitest.config.ts",
     "test:ci": "vitest run -c vitest.config.ts --coverage"
