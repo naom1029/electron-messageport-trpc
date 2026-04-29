@@ -19,7 +19,7 @@ This library solves all three problems:
 
 | Feature | ipcMain/ipcRenderer | electron-messageport-trpc |
 |---|---|---|
-| Topology | Star (main as hub) | Flexible (renderer-to-main, main-to-utility, renderer-to-utility, brokered renderer-to-renderer) |
+| Topology | Star (main as hub) | Flexible (renderer-to-main, main-to-utility, renderer-to-utility) |
 | Type safety | None | Full end-to-end via tRPC |
 | Serialization | JSON.stringify | Structured Clone (native `Date`, `Map`, `Set`) |
 | Subscriptions | Manual event listeners | tRPC subscriptions (async iterables) |
@@ -49,15 +49,16 @@ Because MessagePort uses the [Structured Clone algorithm](https://developer.mozi
 
 ```
 ┌─────────────┐   MessagePort   ┌──────────────┐
-│  Renderer A  │<===============>│  Main Process │
+│  Renderer   │<===============>│  Main Process │
 └─────────────┘                 └──────┬───────┘
                                        │ MessagePort
-┌─────────────┐   MessagePort   ┌──────┴───────┐
-│  Renderer B  │<===============>│  Main Process │
-└─────────────┘                 └──────────────┘
+                                       │
+                               ┌───────┴────────┐
+                               │ Utility Process │
+                               └─────────────────┘
 ```
 
-In advanced topologies, the main process can broker ports between two renderers for direct peer-to-peer communication, or hand a port off to a utility process so the main thread stays out of the request path.
+In advanced topologies, the main process can also hand a port off to a utility process so the main thread stays out of the request path.
 
 ## Next Steps
 

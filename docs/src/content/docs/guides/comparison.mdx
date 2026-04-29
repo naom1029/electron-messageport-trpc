@@ -51,7 +51,7 @@ const result = await trpc.greet.query({ name: 'World' });
 ### Advantages
 
 1. **End-to-end type safety** -- TypeScript validates inputs and outputs at compile time
-2. **Flexible topology** -- MessagePort enables direct renderer-to-renderer and main-to-utility communication
+2. **Flexible topology** -- MessagePort enables renderer-to-main and utility-process communication patterns
 3. **Structured Clone** -- native transfer of `Date`, `Map`, `Set`, `ArrayBuffer`, `Error`, and more
 4. **Built-in subscriptions** -- tRPC v11 async iterables work natively
 5. **Schema validation** -- use Zod (or any validator) for runtime input validation
