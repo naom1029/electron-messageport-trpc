@@ -10,7 +10,7 @@ Type-safe IPC for Electron using MessagePort and tRPC v11.
 
 - **MessagePort-based transport** -- uses MessagePort instead of ipcMain/ipcRenderer
 - **tRPC v11 native** -- async iterables for subscriptions
-- **Flexible topology** -- renderer-to-main, main-to-utility, renderer-to-utility, and brokered renderer-to-renderer
+- **Flexible topology** -- renderer-to-main, main-to-utility, and renderer-to-utility
 - **Structured Clone serialization** -- native Date, Map, Set, ArrayBuffer support
 - **Full TypeScript support**
 - **4 entry points** -- `/main`, `/renderer`, `/preload`, `/utility`
