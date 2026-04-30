@@ -23,6 +23,13 @@ export interface TRPCPortResultData {
   id: number;
   type: 'data';
   data: unknown;
+  eventId?: string;
+}
+
+export interface TRPCPortResultStarted {
+  kind: 'result';
+  id: number;
+  type: 'started';
 }
 
 export interface TRPCPortResultStopped {
@@ -43,5 +50,6 @@ export interface TRPCPortError {
 
 export type ServerMessage =
   | TRPCPortResultData
+  | TRPCPortResultStarted
   | TRPCPortResultStopped
   | TRPCPortError;

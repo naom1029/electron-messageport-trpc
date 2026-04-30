@@ -219,6 +219,8 @@ app.whenReady().then(() => {
 When a `subscription` request arrives:
 
 1. The procedure is called and must return an async iterable.
-2. Each yielded value is sent as a `{ kind: 'result', type: 'data' }` message.
-3. When the client sends `{ kind: 'subscription.stop' }`, the `AbortController` is aborted.
-4. When the port closes, all active subscriptions are aborted automatically.
+2. The handler sends `{ kind: 'result', type: 'started' }`.
+3. Each yielded value is sent as a `{ kind: 'result', type: 'data' }` message.
+4. If the procedure yields `tracked(id, data)`, the handler sends the tracked event ID for tRPC v11 resumption.
+5. When the client sends `{ kind: 'subscription.stop' }`, the `AbortController` is aborted.
+6. When the port closes, all active subscriptions are aborted automatically.
