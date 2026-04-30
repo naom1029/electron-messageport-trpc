@@ -97,7 +97,10 @@ function MutationDemo() {
 
 function SubscriptionDemo() {
   const [time, setTime] = useState('');
-  const [newTodos, setNewTodos] = useState<{ id: number; text: string }[]>([]);
+  const [newTodos, setNewTodos] = useState<
+    { eventId: string; todoId: number; text: string }[]
+  >([]);
+  const [countdownEvents, setCountdownEvents] = useState<string[]>([]);
   const timeSubRef = useRef<{ unsubscribe: () => void } | null>(null);
   const todoSubRef = useRef<{ unsubscribe: () => void } | null>(null);
 
@@ -109,14 +112,37 @@ function SubscriptionDemo() {
     });
 
     todoSubRef.current = trpc.onTodoAdded.subscribe(undefined, {
-      onData(todo) {
-        setNewTodos((prev) => [...prev, { id: todo.id, text: todo.text }]);
+      onData(event) {
+        setNewTodos((prev) => [
+          ...prev,
+          {
+            eventId: event.id,
+            todoId: event.data.id,
+            text: event.data.text,
+          },
+        ]);
+      },
+    });
+
+    const countdownSub = trpc.countdown.subscribe(undefined, {
+      onStarted() {
+        setCountdownEvents((prev) => [...prev, 'started']);
+      },
+      onData(data) {
+        setCountdownEvents((prev) => [...prev, `data:${data.count}`]);
+      },
+      onStopped() {
+        setCountdownEvents((prev) => [...prev, 'stopped']);
+      },
+      onComplete() {
+        setCountdownEvents((prev) => [...prev, 'complete']);
       },
     });
 
     return () => {
       timeSubRef.current?.unsubscribe();
       todoSubRef.current?.unsubscribe();
+      countdownSub.unsubscribe();
     };
   }, []);
 
@@ -127,18 +153,22 @@ function SubscriptionDemo() {
         Server time: <strong>{time || 'connecting...'}</strong>
       </p>
       <div>
-        <h3>New todos (via subscription)</h3>
+        <h3>Tracked todo events</h3>
         {newTodos.length === 0 ? (
           <p>Add a todo above to see it appear here in real-time</p>
         ) : (
           <ul>
-            {newTodos.map((todo) => (
-              <li key={todo.id}>
-                [{todo.id}] {todo.text}
+            {newTodos.map((event) => (
+              <li key={event.eventId}>
+                event #{event.eventId}: todo #{event.todoId} {event.text}
               </li>
             ))}
           </ul>
         )}
+      </div>
+      <div>
+        <h3>Finite countdown lifecycle</h3>
+        <p>{countdownEvents.join(' -> ') || 'starting...'}</p>
       </div>
     </section>
   );

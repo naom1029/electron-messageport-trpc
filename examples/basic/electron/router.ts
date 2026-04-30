@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { initTRPC } from '@trpc/server';
+import { initTRPC, tracked } from '@trpc/server';
 import { z } from 'zod';
 
 const t = initTRPC.create();
@@ -59,7 +59,7 @@ export const appRouter = t.router({
         if (queue.length > 0) {
           const nextTodo = queue.shift();
           if (nextTodo) {
-            yield nextTodo;
+            yield tracked(String(nextTodo.id), nextTodo);
           }
         } else {
           await new Promise<void>((r) => {
@@ -77,6 +77,14 @@ export const appRouter = t.router({
     while (!opts.signal?.aborted) {
       yield { time: new Date().toISOString() };
       await new Promise((r) => setTimeout(r, 1000));
+    }
+  }),
+
+  // Subscription: finite stream to demonstrate started/stopped lifecycle callbacks
+  countdown: t.procedure.subscription(async function* () {
+    for (let count = 3; count >= 0; count--) {
+      yield { count };
+      await new Promise((r) => setTimeout(r, 250));
     }
   }),
 });
