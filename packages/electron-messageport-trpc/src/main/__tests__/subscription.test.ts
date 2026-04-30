@@ -1,5 +1,5 @@
 import { createTRPCClient } from '@trpc/client';
-import { initTRPC } from '@trpc/server';
+import { initTRPC, tracked } from '@trpc/server';
 import { describe, expect, it } from 'vitest';
 import { portLink } from '../../renderer/portLink';
 import { createBridgedPair } from '../../shared/__tests__/mockBridge';
@@ -15,6 +15,15 @@ function setupRouter() {
           yield { count: i };
         }
       }),
+    resumeFrom: t.procedure
+      .input((v: unknown) => v as { lastEventId?: string } | undefined)
+      .subscription(async function* ({ input }) {
+        yield { lastEventId: input?.lastEventId ?? null };
+      }),
+    trackedEvents: t.procedure.subscription(async function* () {
+      yield tracked('event-1', { value: 1 });
+      yield tracked('event-2', { value: 2 });
+    }),
     infinite: t.procedure.subscription(async function* (opts) {
       let i = 0;
       while (!opts.signal?.aborted) {
@@ -69,6 +78,107 @@ describe('subscription', () => {
         { count: 1 },
         { count: 0 },
       ]);
+    });
+
+    it('should send v11 subscription started and stopped envelopes', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const received: string[] = [];
+
+      // Act
+      await new Promise<void>((resolve) => {
+        clientPort.addEventListener('message', ((event: MessageEvent) => {
+          const msg = event.data;
+          if (msg.kind === 'result') {
+            received.push(msg.type);
+          }
+          if (msg.kind === 'result' && msg.type === 'stopped') {
+            resolve();
+          }
+        }) as EventListener);
+
+        clientPort.postMessage({
+          kind: 'request',
+          id: 1,
+          method: 'subscription',
+          path: 'countdown',
+          input: { from: 1 },
+        });
+      });
+
+      // Assert
+      expect(received).toEqual(['started', 'data', 'data', 'stopped']);
+    });
+
+    it('should merge lastEventId into subscription input', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      // Act
+      const received = await new Promise<unknown>((resolve) => {
+        clientPort.addEventListener('message', ((event: MessageEvent) => {
+          const msg = event.data;
+          if (msg.kind === 'result' && msg.type === 'data') {
+            resolve(msg.data);
+          }
+        }) as EventListener);
+
+        clientPort.postMessage({
+          kind: 'request',
+          id: 1,
+          method: 'subscription',
+          path: 'resumeFrom',
+          input: undefined,
+          lastEventId: 'event-1',
+        });
+      });
+
+      // Assert
+      expect(received).toEqual({ lastEventId: 'event-1' });
+    });
+
+    it('should unwrap tracked envelopes for the port protocol', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const received: unknown[] = [];
+      const eventIds: unknown[] = [];
+
+      // Act
+      await new Promise<void>((resolve) => {
+        clientPort.addEventListener('message', ((event: MessageEvent) => {
+          const msg = event.data;
+          if (msg.kind === 'result' && msg.type === 'data') {
+            received.push(msg.data);
+            eventIds.push(msg.eventId);
+          }
+          if (msg.kind === 'result' && msg.type === 'stopped') {
+            resolve();
+          }
+        }) as EventListener);
+
+        clientPort.postMessage({
+          kind: 'request',
+          id: 1,
+          method: 'subscription',
+          path: 'trackedEvents',
+          input: undefined,
+        });
+      });
+
+      // Assert
+      expect(received).toEqual([
+        { id: 'event-1', data: { value: 1 } },
+        { id: 'event-2', data: { value: 2 } },
+      ]);
+      expect(eventIds).toEqual(['event-1', 'event-2']);
     });
 
     it('should stop subscription when subscription.stop is received', async () => {
@@ -162,16 +272,25 @@ describe('subscription', () => {
       });
 
       const received: unknown[] = [];
+      const events: string[] = [];
 
       // Act
       await new Promise<void>((resolve, reject) => {
         const _sub = client.countdown.subscribe(
           { from: 2 },
           {
+            onStarted() {
+              events.push('started');
+            },
             onData(data) {
+              events.push('data');
               received.push(data);
             },
+            onStopped() {
+              events.push('stopped');
+            },
             onComplete() {
+              events.push('complete');
               resolve();
             },
             onError(err) {
@@ -183,6 +302,48 @@ describe('subscription', () => {
 
       // Assert
       expect(received).toEqual([{ count: 2 }, { count: 1 }, { count: 0 }]);
+      expect(events).toEqual([
+        'started',
+        'data',
+        'data',
+        'data',
+        'stopped',
+        'complete',
+      ]);
+    });
+
+    it('should receive tracked subscription values via tRPC client', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const client = createTRPCClient<AppRouter>({
+        links: [portLink({ port: clientPort })],
+      });
+
+      const received: unknown[] = [];
+
+      // Act
+      await new Promise<void>((resolve, reject) => {
+        const _sub = client.trackedEvents.subscribe(undefined, {
+          onData(data) {
+            received.push(data);
+          },
+          onComplete() {
+            resolve();
+          },
+          onError(err) {
+            reject(err);
+          },
+        });
+      });
+
+      // Assert
+      expect(received).toEqual([
+        { id: 'event-1', data: { value: 1 } },
+        { id: 'event-2', data: { value: 2 } },
+      ]);
     });
 
     it('should be able to unsubscribe from the client side', async () => {

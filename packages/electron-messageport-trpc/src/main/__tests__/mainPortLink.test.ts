@@ -66,15 +66,24 @@ describe('mainPortLink', () => {
     });
 
     const received: Array<{ count: number }> = [];
+    const events: string[] = [];
 
     await new Promise<void>((resolve, reject) => {
       client.countdown.subscribe(
         { from: 2 },
         {
+          onStarted() {
+            events.push('started');
+          },
           onData(data) {
+            events.push('data');
             received.push(data);
           },
+          onStopped() {
+            events.push('stopped');
+          },
           onComplete() {
+            events.push('complete');
             resolve();
           },
           onError(error) {
@@ -85,5 +94,13 @@ describe('mainPortLink', () => {
     });
 
     expect(received).toEqual([{ count: 2 }, { count: 1 }, { count: 0 }]);
+    expect(events).toEqual([
+      'started',
+      'data',
+      'data',
+      'data',
+      'stopped',
+      'complete',
+    ]);
   });
 });
