@@ -71,13 +71,13 @@
     "test:ci": "vitest run -c vitest.config.ts --coverage"
   },
   "peerDependencies": {
-    "@trpc/client": "^11.0.0",
-    "@trpc/server": "^11.0.0",
+    "@trpc/client": "^11.17.0",
+    "@trpc/server": "^11.17.0",
     "electron": ">=22.0.0"
   },
   "devDependencies": {
-    "@trpc/client": "^11.0.0",
-    "@trpc/server": "^11.0.0",
+    "@trpc/client": "^11.17.0",
+    "@trpc/server": "^11.17.0",
     "@vitest/coverage-v8": "^4.1.0",
     "electron": "^41.0.0",
     "typescript": "^6.0.2",
