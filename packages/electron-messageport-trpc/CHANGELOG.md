@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/naom1029/electron-messageport-trpc/compare/electron-messageport-trpc-v0.2.0...electron-messageport-trpc-v0.3.0) (2026-05-11)
+
+
+### Features
+
+* align subscription envelopes with tRPC v11 ([#42](https://github.com/naom1029/electron-messageport-trpc/issues/42)) ([284f8ce](https://github.com/naom1029/electron-messageport-trpc/commit/284f8ce44feaf3585d6dd5cadaeb88aa581f438d))
+
+
+### Bug Fixes
+
+* avoid bundling tRPC peer subpaths ([#44](https://github.com/naom1029/electron-messageport-trpc/issues/44)) ([1262d6b](https://github.com/naom1029/electron-messageport-trpc/commit/1262d6b77b442434e7216459b32a0ece3c9fb2cf))
+
 ## [0.2.0](https://github.com/naom1029/electron-messageport-trpc/compare/electron-messageport-trpc-v0.1.1...electron-messageport-trpc-v0.2.0) (2026-04-03)
 
 
