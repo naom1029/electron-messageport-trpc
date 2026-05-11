@@ -10,7 +10,7 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: false,
     rollupOptions: {
-      external: ['@trpc/server', '@trpc/client'],
+      external: [/^@trpc\/server(\/.*)?$/, /^@trpc\/client(\/.*)?$/],
     },
   },
 });

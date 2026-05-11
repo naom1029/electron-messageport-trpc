@@ -97,7 +97,11 @@ describe('createPortHandler', () => {
       expect(response.kind).toBe('error');
       expect(response.id).toBe(2);
       if (response.kind === 'error') {
+        expect(response.error.code).toBe(-32603);
         expect(response.error.message).toContain('Something went wrong');
+        expect((response.error.data as { code: string }).code).toBe(
+          'INTERNAL_SERVER_ERROR',
+        );
       }
     });
 

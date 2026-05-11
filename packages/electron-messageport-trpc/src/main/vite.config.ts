@@ -10,7 +10,11 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: false,
     rollupOptions: {
-      external: ['electron', '@trpc/server', '@trpc/client'],
+      external: [
+        'electron',
+        /^@trpc\/server(\/.*)?$/,
+        /^@trpc\/client(\/.*)?$/,
+      ],
     },
   },
 });
