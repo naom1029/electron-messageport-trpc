@@ -1,11 +1,10 @@
-import type { AnyRouter } from '@trpc/server';
 import {
-  callProcedure,
+  type AnyRouter,
+  callTRPCProcedure,
   getErrorShape,
   getTRPCErrorFromUnknown,
-  isAsyncIterable,
   isTrackedEnvelope,
-} from '@trpc/server/unstable-core-do-not-import';
+} from '@trpc/server';
 import type {
   ClientMessage,
   ServerMessage,
@@ -33,6 +32,10 @@ export interface PortHandler {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && !Array.isArray(value) && typeof value === 'object';
+}
+
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+  return isObject(value) && Symbol.asyncIterator in value;
 }
 
 function inputWithLastEventId(input: unknown, lastEventId: string | undefined) {
@@ -78,7 +81,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
       kind: 'error',
       id,
       error: {
-        code: shape.data.code,
+        code: shape.code,
         message: shape.message,
         data: shape.data,
       },
@@ -133,7 +136,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
         subscriptions.set(id, ac);
       }
 
-      const result = await callProcedure({
+      const result = await callTRPCProcedure({
         router,
         path,
         type: method,
