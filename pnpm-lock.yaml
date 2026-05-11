@@ -33,11 +33,11 @@ importers:
   examples/basic:
     dependencies:
       '@trpc/client':
-        specifier: ^11.0.0
-        version: 11.16.0(@trpc/server@11.16.0(typescript@5.9.3))(typescript@5.9.3)
+        specifier: ^11.17.0
+        version: 11.17.0(@trpc/server@11.17.0(typescript@5.9.3))(typescript@5.9.3)
       '@trpc/server':
-        specifier: ^11.0.0
-        version: 11.16.0(typescript@5.9.3)
+        specifier: ^11.17.0
+        version: 11.17.0(typescript@5.9.3)
       electron-messageport-trpc:
         specifier: workspace:*
         version: link:../../packages/electron-messageport-trpc
@@ -76,11 +76,11 @@ importers:
   examples/main-utility:
     dependencies:
       '@trpc/client':
-        specifier: ^11.0.0
-        version: 11.16.0(@trpc/server@11.16.0(typescript@5.9.3))(typescript@5.9.3)
+        specifier: ^11.17.0
+        version: 11.17.0(@trpc/server@11.17.0(typescript@5.9.3))(typescript@5.9.3)
       '@trpc/server':
-        specifier: ^11.0.0
-        version: 11.16.0(typescript@5.9.3)
+        specifier: ^11.17.0
+        version: 11.17.0(typescript@5.9.3)
       electron-messageport-trpc:
         specifier: workspace:*
         version: link:../../packages/electron-messageport-trpc
@@ -119,11 +119,11 @@ importers:
   examples/renderer-utility:
     dependencies:
       '@trpc/client':
-        specifier: ^11.0.0
-        version: 11.16.0(@trpc/server@11.16.0(typescript@5.9.3))(typescript@5.9.3)
+        specifier: ^11.17.0
+        version: 11.17.0(@trpc/server@11.17.0(typescript@5.9.3))(typescript@5.9.3)
       '@trpc/server':
-        specifier: ^11.0.0
-        version: 11.16.0(typescript@5.9.3)
+        specifier: ^11.17.0
+        version: 11.17.0(typescript@5.9.3)
       electron-messageport-trpc:
         specifier: workspace:*
         version: link:../../packages/electron-messageport-trpc
@@ -162,11 +162,11 @@ importers:
   packages/electron-messageport-trpc:
     devDependencies:
       '@trpc/client':
-        specifier: ^11.0.0
-        version: 11.16.0(@trpc/server@11.16.0(typescript@6.0.2))(typescript@6.0.2)
+        specifier: ^11.17.0
+        version: 11.17.0(@trpc/server@11.17.0(typescript@6.0.2))(typescript@6.0.2)
       '@trpc/server':
-        specifier: ^11.0.0
-        version: 11.16.0(typescript@6.0.2)
+        specifier: ^11.17.0
+        version: 11.17.0(typescript@6.0.2)
       '@vitest/coverage-v8':
         specifier: ^4.1.0
         version: 4.1.2(vitest@4.1.2(@types/node@24.12.2)(vite@8.0.5(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.8.3)))
@@ -1446,15 +1446,15 @@ packages:
     resolution: {integrity: sha512-4BAffykYOgO+5nzBWYwE3W90sBgLJoUPRWWcL8wlyiM8IB8ipJz3UMJ9KXQd1RKQXpKp8Tutn80HZtWsu2u76w==}
     engines: {node: '>=10'}
 
-  '@trpc/client@11.16.0':
-    resolution: {integrity: sha512-TxIzm7OoK3baKZ0XCbuMUbI3GhgjcbKHIc4nWVKaRpCRnbSh0T31BT6fTPYwtnA/Nur8pBCGqC2B4J5hEPiPFQ==}
+  '@trpc/client@11.17.0':
+    resolution: {integrity: sha512-KpJBFrbKTDeVCFv/3ckL1XBBH5Yssn8hethI/rUy7GIpTj+VzjtPjykDqJpzobuVOz+d26cXCSu1t4I6MYI5Zg==}
     hasBin: true
     peerDependencies:
-      '@trpc/server': 11.16.0
+      '@trpc/server': 11.17.0
       typescript: '>=5.7.2'
 
-  '@trpc/server@11.16.0':
-    resolution: {integrity: sha512-XgGuUMddrUTd04+za/WE5GFuZ1/YU9XQG0t3VL5WOIu2JspkOlq6k4RYEiqS6HSJt+S0RXaPdIoE2anIP/BBRQ==}
+  '@trpc/server@11.17.0':
+    resolution: {integrity: sha512-jbAOUe0PpUTCYqziyu+8vYXZdDXPudZgnEhWCQ2NjKnVEjfE93RqHTt1oycZJv/HNf51YlRXfEEwSIAbb161rw==}
     hasBin: true
     peerDependencies:
       typescript: '>=5.7.2'
@@ -1547,6 +1547,7 @@ packages:
 
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
+    deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
   '@vitejs/plugin-react@4.7.0':
     resolution: {integrity: sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA==}
@@ -4395,21 +4396,21 @@ snapshots:
     dependencies:
       defer-to-connect: 2.0.1
 
-  '@trpc/client@11.16.0(@trpc/server@11.16.0(typescript@5.9.3))(typescript@5.9.3)':
+  '@trpc/client@11.17.0(@trpc/server@11.17.0(typescript@5.9.3))(typescript@5.9.3)':
     dependencies:
-      '@trpc/server': 11.16.0(typescript@5.9.3)
+      '@trpc/server': 11.17.0(typescript@5.9.3)
       typescript: 5.9.3
 
-  '@trpc/client@11.16.0(@trpc/server@11.16.0(typescript@6.0.2))(typescript@6.0.2)':
+  '@trpc/client@11.17.0(@trpc/server@11.17.0(typescript@6.0.2))(typescript@6.0.2)':
     dependencies:
-      '@trpc/server': 11.16.0(typescript@6.0.2)
+      '@trpc/server': 11.17.0(typescript@6.0.2)
       typescript: 6.0.2
 
-  '@trpc/server@11.16.0(typescript@5.9.3)':
+  '@trpc/server@11.17.0(typescript@5.9.3)':
     dependencies:
       typescript: 5.9.3
 
-  '@trpc/server@11.16.0(typescript@6.0.2)':
+  '@trpc/server@11.17.0(typescript@6.0.2)':
     dependencies:
       typescript: 6.0.2
 
