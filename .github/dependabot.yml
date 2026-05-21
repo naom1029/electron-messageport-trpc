@@ -5,7 +5,9 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 10
     rebase-strategy: auto
     commit-message:
       prefix: "chore(deps)"
@@ -13,20 +15,62 @@ updates:
       trpc:
         patterns:
           - "@trpc/*"
+        update-types:
+          - minor
+          - patch
+      electron:
+        patterns:
+          - "electron"
+        update-types:
+          - minor
+          - patch
       astro:
         patterns:
           - "astro"
           - "@astrojs/*"
+          - "sharp"
+        update-types:
+          - minor
+          - patch
+      examples:
+        patterns:
+          - "@types/react"
+          - "@types/react-dom"
+          - "@vitejs/plugin-react"
+          - "react"
+          - "react-dom"
+          - "vite-plugin-electron"
+          - "zod"
+        update-types:
+          - minor
+          - patch
       dev-dependencies:
         dependency-type: development
+        patterns:
+          - "@biomejs/biome"
+          - "@vitest/*"
+          - "knip"
+          - "typescript"
+          - "vite"
+          - "vitest"
         exclude-patterns:
           - "@trpc/*"
           - "electron"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
     rebase-strategy: auto
     commit-message:
       prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
