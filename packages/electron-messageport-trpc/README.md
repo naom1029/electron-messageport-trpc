@@ -166,14 +166,19 @@ import { createParentPortHandler } from 'electron-messageport-trpc/utility';
 | `mainPortLink` | The main process creates a tRPC client over a `MessagePortMain`, usually to call a utility process. |
 | `createParentPortHandler` | A utility process exposes a tRPC router on `process.parentPort`. |
 | `createPortBroker` | Main only brokers a port between renderer and utility, keeping main out of the request path. |
-| `createPortHandler` | Low-level helper for attaching a router to an existing port manually. |
+| `createPortHandler` | Low-level helper for attaching a router to an existing protocol-dedicated port manually. |
 
 ## Lifecycle
 
-- Call `unsubscribe()` for renderer subscriptions you no longer need.
 - Call `handler.destroy()` when tearing down a custom handler or before app quit if you keep a long-lived handler reference.
 - Destroying a handler closes the port and aborts active subscriptions.
 - `createWindowMessagePortHandler()` also cleans up a window's active port when that window closes.
+
+## Current Constraints
+
+- Treat each MessagePort passed to this package as dedicated to the electron-messageport-trpc protocol.
+- Do not use the same MessagePort for app-defined `postMessage()` traffic.
+- Create one terminating `portLink()` or `mainPortLink()` per MessagePort. Sharing the same port across multiple terminating link instances can collide request IDs.
 
 ## Examples and Docs
 
