@@ -165,6 +165,38 @@ describe('createPortHandler', () => {
   });
 
   describe('lifecycle', () => {
+    it('should ignore malformed messages and continue handling requests', async () => {
+      // Arrange
+      const router = setupRouter();
+      const [clientPort, serverPort] = MockMessagePortMain.createPair();
+      clientPort.start();
+
+      createPortHandler({ port: serverPort, router });
+
+      // Act - these should not throw or close the handler.
+      clientPort.postMessage(null);
+      clientPort.postMessage('not a protocol message');
+      clientPort.postMessage({ kind: 'request', id: 'bad' });
+
+      const responsePromise = waitForMessage(clientPort);
+      clientPort.postMessage({
+        kind: 'request',
+        id: 10,
+        method: 'query',
+        path: 'greet',
+        input: { name: 'AfterInvalid' },
+      } satisfies ClientMessage);
+
+      // Assert
+      const response = await responsePromise;
+      expect(response).toEqual({
+        kind: 'result',
+        id: 10,
+        type: 'data',
+        data: { message: 'Hello, AfterInvalid!' },
+      });
+    });
+
     it('should call port.start() during initialization', () => {
       // Arrange
       const router = setupRouter();

@@ -56,6 +56,44 @@ describe('mainPortLink', () => {
     expect(result).toEqual({ count: 3 });
   });
 
+  it('avoids request id collisions across link instances sharing a port', async () => {
+    const router = setupRouter();
+    const [clientPort, serverPort] = MockMessagePortMain.createPair();
+    createPortHandler({ port: serverPort, router });
+
+    const clientA = createTRPCClient<AppRouter>({
+      links: [mainPortLink({ port: clientPort })],
+    });
+    const clientB = createTRPCClient<AppRouter>({
+      links: [mainPortLink({ port: clientPort })],
+    });
+
+    const [resultA, resultB] = await Promise.all([
+      clientA.greet.query({ name: 'main-a' }),
+      clientB.greet.query({ name: 'main-b' }),
+    ]);
+
+    expect(resultA).toBe('hello main-a');
+    expect(resultB).toBe('hello main-b');
+  });
+
+  it('ignores malformed server messages and continues handling requests', async () => {
+    const router = setupRouter();
+    const [clientPort, serverPort] = MockMessagePortMain.createPair();
+    createPortHandler({ port: serverPort, router });
+
+    const client = createTRPCClient<AppRouter>({
+      links: [mainPortLink({ port: clientPort })],
+    });
+
+    clientPort.emit('message', { data: null });
+    clientPort.emit('message', { data: { kind: 'result', id: 'bad' } });
+
+    const result = await client.greet.query({ name: 'after-invalid' });
+
+    expect(result).toBe('hello after-invalid');
+  });
+
   it('streams subscription values through a MessagePortMain-compatible client', async () => {
     const router = setupRouter();
     const [clientPort, serverPort] = MockMessagePortMain.createPair();
