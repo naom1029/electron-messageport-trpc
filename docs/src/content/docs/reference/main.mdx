@@ -102,6 +102,10 @@ const client = createTRPCClient({
 });
 ```
 
+<Aside type="caution">
+Create one terminating `mainPortLink()` for each MessagePort. Sharing the same port across multiple terminating link instances can collide request IDs.
+</Aside>
+
 ---
 
 ## `createPortBroker()`
@@ -154,6 +158,10 @@ Internally, `createRendererPort` calls `webContents.postMessage()` with the port
 ## `createPortHandler(opts)`
 
 Attaches a tRPC request handler to a MessagePort. It listens for incoming tRPC requests (queries, mutations, subscriptions) and routes them to the given router.
+
+<Aside type="caution">
+This is a low-level API. The supplied port should be dedicated to the electron-messageport-trpc protocol; do not multiplex app-defined `postMessage()` traffic on the same port.
+</Aside>
 
 ### Parameters
 
