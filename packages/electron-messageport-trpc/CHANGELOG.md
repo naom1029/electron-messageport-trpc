@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/naom1029/electron-messageport-trpc/compare/electron-messageport-trpc-v0.3.0...electron-messageport-trpc-v0.3.1) (2026-05-26)
+
+
+### Bug Fixes
+
+* Guard MessagePort protocol messages ([#69](https://github.com/naom1029/electron-messageport-trpc/issues/69)) ([9fcdec4](https://github.com/naom1029/electron-messageport-trpc/commit/9fcdec49d49d5f6d5943541a666d9340b582381f))
+
 ## [0.3.0](https://github.com/naom1029/electron-messageport-trpc/compare/electron-messageport-trpc-v0.2.0...electron-messageport-trpc-v0.3.0) (2026-05-21)
 
 
