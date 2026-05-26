@@ -50,10 +50,6 @@ const trpc = createTRPCClient<AppRouter>({
 Since `portLink` accepts a `Promise<MessagePort>`, you can pass `getPort()` directly. The link will queue outgoing requests until the port resolves, then flush them.
 </Aside>
 
-<Aside type="caution">
-Create one terminating `portLink()` for each MessagePort. Sharing the same port across multiple terminating link instances can collide request IDs.
-</Aside>
-
 ### How It Works
 
 1. On first use, the link resolves the port promise and sets up a `message` event listener.
