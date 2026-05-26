@@ -3,6 +3,8 @@ import { TRPCClientError } from '@trpc/client';
 import type { AnyRouter } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
 import type { ClientMessage, ServerMessage } from '../shared/protocol';
+import { isServerMessage } from '../shared/protocol';
+import { nextRequestId } from '../shared/requestId';
 
 interface RendererPortLike {
   addEventListener(
@@ -43,12 +45,15 @@ export function portLink<TRouter extends AnyRouter>(
   return () => {
     const portPromise = Promise.resolve(opts.port);
     const pending = new Map<number, PendingRequest>();
-    let idCounter = 0;
     let resolvedPort: RendererPortLike | null = null;
     let initialized = false;
 
     function handleMessage(event: MessageEvent): void {
-      const msg = event.data as ServerMessage;
+      if (!isServerMessage(event.data)) {
+        return;
+      }
+
+      const msg: ServerMessage = event.data;
       const req = pending.get(msg.id);
       if (!req) return;
 
@@ -87,7 +92,7 @@ export function portLink<TRouter extends AnyRouter>(
 
     return ({ op }) => {
       return observable((observer) => {
-        const id = ++idCounter;
+        const id = nextRequestId();
 
         pending.set(id, {
           type: op.type,

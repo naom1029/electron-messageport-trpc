@@ -178,7 +178,7 @@ import { createParentPortHandler } from 'electron-messageport-trpc/utility';
 
 - Treat each MessagePort passed to this package as dedicated to the electron-messageport-trpc protocol.
 - Do not use the same MessagePort for app-defined `postMessage()` traffic.
-- Create one terminating `portLink()` or `mainPortLink()` per MessagePort. Sharing the same port across multiple terminating link instances can collide request IDs.
+- Messages that do not match the electron-messageport-trpc protocol are discarded.
 
 ## Examples and Docs
 

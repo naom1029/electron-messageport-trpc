@@ -10,6 +10,7 @@ import type {
   ServerMessage,
   TRPCPortRequest,
 } from '../shared/protocol';
+import { isClientMessage } from '../shared/protocol';
 
 export interface MessagePortLike {
   on(event: 'message', listener: (event: { data: unknown }) => void): void;
@@ -168,7 +169,11 @@ export function createPortHandler<TRouter extends AnyRouter>(
   }
 
   function handleMessage(event: { data: unknown }): void {
-    const msg = event.data as ClientMessage;
+    if (!isClientMessage(event.data)) {
+      return;
+    }
+
+    const msg: ClientMessage = event.data;
 
     if (msg.kind === 'subscription.stop') {
       const ac = subscriptions.get(msg.id);

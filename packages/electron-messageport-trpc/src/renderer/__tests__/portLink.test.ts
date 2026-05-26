@@ -124,6 +124,54 @@ describe('portLink', () => {
       expect(r2).toEqual({ message: 'Hello, Bob!' });
       expect(r3).toBe(30);
     });
+
+    it('should avoid request id collisions across link instances sharing a port', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const clientA = createTRPCClient<AppRouter>({
+        links: [portLink({ port: clientPort })],
+      });
+      const clientB = createTRPCClient<AppRouter>({
+        links: [portLink({ port: clientPort })],
+      });
+
+      // Act
+      const [resultA, resultB] = await Promise.all([
+        clientA.greet.query({ name: 'Alice' }),
+        clientB.greet.query({ name: 'Bob' }),
+      ]);
+
+      // Assert
+      expect(resultA).toEqual({ message: 'Hello, Alice!' });
+      expect(resultB).toEqual({ message: 'Hello, Bob!' });
+    });
+  });
+
+  describe('malformed messages', () => {
+    it('should ignore malformed server messages and continue handling requests', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const client = createTRPCClient<AppRouter>({
+        links: [portLink({ port: clientPort })],
+      });
+
+      clientPort.dispatchEvent(new MessageEvent('message', { data: null }));
+      clientPort.dispatchEvent(
+        new MessageEvent('message', { data: { kind: 'result', id: 'bad' } }),
+      );
+
+      // Act
+      const result = await client.greet.query({ name: 'AfterInvalid' });
+
+      // Assert
+      expect(result).toEqual({ message: 'Hello, AfterInvalid!' });
+    });
   });
 
   describe('port as Promise', () => {
