@@ -135,4 +135,18 @@ describe('createWindowMessagePortHandler', () => {
 
     expect(window.webContents.postMessage).not.toHaveBeenCalled();
   });
+
+  it('allows destroy() to be called more than once', () => {
+    const window = new MockBrowserWindow();
+    const handler = createWindowMessagePortHandler({
+      router,
+      windows: [window],
+    });
+
+    handler.destroy();
+    handler.destroy();
+    window.webContents.emit('did-finish-load');
+
+    expect(window.webContents.postMessage).not.toHaveBeenCalled();
+  });
 });

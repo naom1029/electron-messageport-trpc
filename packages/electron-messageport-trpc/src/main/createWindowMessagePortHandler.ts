@@ -37,10 +37,15 @@ export function createWindowMessagePortHandler<
 ): WindowMessagePortHandler {
   const broker = createPortBroker();
   const createContext = opts.createContext;
+  let destroyed = false;
   const cleanups = opts.windows.map((window) => {
     let handler: PortHandler | null = null;
 
     function connectWindow(): void {
+      if (destroyed) {
+        return;
+      }
+
       handler?.destroy();
 
       const { serverPort } = broker.createRendererPort(window.webContents);
@@ -69,6 +74,10 @@ export function createWindowMessagePortHandler<
 
   return {
     destroy() {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
       for (const cleanup of cleanups) {
         cleanup();
       }

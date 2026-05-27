@@ -119,16 +119,21 @@ export function portLink<TRouter extends AnyRouter>(
           },
         });
 
-        ensurePort().then((port) => {
-          const message: ClientMessage = {
-            kind: 'request',
-            id,
-            method: op.type,
-            path: op.path,
-            input: op.input,
-          };
-          port.postMessage(message);
-        });
+        ensurePort()
+          .then((port) => {
+            const message: ClientMessage = {
+              kind: 'request',
+              id,
+              method: op.type,
+              path: op.path,
+              input: op.input,
+            };
+            port.postMessage(message);
+          })
+          .catch((error) => {
+            pending.delete(id);
+            observer.error(TRPCClientError.from(error));
+          });
 
         return () => {
           pending.delete(id);
@@ -137,7 +142,11 @@ export function portLink<TRouter extends AnyRouter>(
               kind: 'subscription.stop',
               id,
             };
-            resolvedPort.postMessage(stopMsg);
+            try {
+              resolvedPort.postMessage(stopMsg);
+            } catch {
+              // The operation is already being torn down.
+            }
           }
         };
       });
