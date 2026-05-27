@@ -94,6 +94,20 @@ describe('mainPortLink', () => {
     expect(result).toBe('hello after-invalid');
   });
 
+  it('rejects when request input cannot be cloned', async () => {
+    const router = setupRouter();
+    const [clientPort, serverPort] = MockMessagePortMain.createPair();
+    createPortHandler({ port: serverPort, router });
+
+    const client = createTRPCClient<AppRouter>({
+      links: [mainPortLink({ port: clientPort })],
+    });
+
+    const proxy = new Proxy({ name: 'Proxy' }, {});
+
+    await expect(client.greet.query(proxy)).rejects.toThrow();
+  });
+
   it('streams subscription values through a MessagePortMain-compatible client', async () => {
     const router = setupRouter();
     const [clientPort, serverPort] = MockMessagePortMain.createPair();

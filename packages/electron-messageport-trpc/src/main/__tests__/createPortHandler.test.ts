@@ -36,6 +36,9 @@ function setupRouter() {
     failingQuery: t.procedure.query(() => {
       throw new Error('Something went wrong');
     }),
+    nonCloneableQuery: t.procedure.query(() => {
+      return new Proxy({ value: 'not cloneable' }, {});
+    }),
   });
   return router;
 }
@@ -129,6 +132,34 @@ describe('createPortHandler', () => {
       const response = await responsePromise;
       expect(response.kind).toBe('error');
       expect(response.id).toBe(3);
+    });
+
+    it('should return an error when a query result cannot be cloned', async () => {
+      // Arrange
+      const router = setupRouter();
+      const [clientPort, serverPort] = MockMessagePortMain.createPair();
+      clientPort.start();
+
+      createPortHandler({ port: serverPort, router });
+
+      const responsePromise = waitForMessage(clientPort);
+
+      // Act
+      clientPort.postMessage({
+        kind: 'request',
+        id: 11,
+        method: 'query',
+        path: 'nonCloneableQuery',
+        input: undefined,
+      } satisfies ClientMessage);
+
+      // Assert
+      const response = await responsePromise;
+      expect(response.kind).toBe('error');
+      expect(response.id).toBe(11);
+      if (response.kind === 'error') {
+        expect(response.error.message).toContain('could not be cloned');
+      }
     });
   });
 
@@ -262,6 +293,22 @@ describe('createPortHandler', () => {
       const handler = createPortHandler({ port: serverPort, router });
 
       // Act
+      handler.destroy();
+
+      // Assert
+      expect(closeSpy).toHaveBeenCalledOnce();
+    });
+
+    it('should allow destroy() to be called more than once', () => {
+      // Arrange
+      const router = setupRouter();
+      const [_clientPort, serverPort] = MockMessagePortMain.createPair();
+      const closeSpy = vi.spyOn(serverPort, 'close');
+
+      const handler = createPortHandler({ port: serverPort, router });
+
+      // Act
+      handler.destroy();
       handler.destroy();
 
       // Assert
