@@ -11,6 +11,8 @@ This page documents the low-level message protocol used over the MessagePort. Yo
 All messages are sent via `port.postMessage()` and received via the `message` event. Because MessagePort uses the Structured Clone algorithm, messages are not serialized to JSON -- objects are transferred natively.
 </Aside>
 
+Values that cannot be cloned by the platform Structured Clone algorithm, such as JavaScript `Proxy` objects, cannot be sent over this transport.
+
 ## Client to Server Messages
 
 ### Request

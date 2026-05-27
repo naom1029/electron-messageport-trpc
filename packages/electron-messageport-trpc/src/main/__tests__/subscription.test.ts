@@ -35,6 +35,9 @@ function setupRouter() {
       yield { ok: true };
       throw new Error('Subscription exploded');
     }),
+    nonCloneableSub: t.procedure.subscription(async function* () {
+      yield new Proxy({ value: 'not cloneable' }, {});
+    }),
   });
 }
 
@@ -257,6 +260,37 @@ describe('subscription', () => {
       // Assert
       expect(result.data).toEqual([{ ok: true }]);
       expect(result.error).toBeTruthy();
+    });
+
+    it('should send error when a subscription value cannot be cloned', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      // Act
+      const error = await new Promise<unknown>((resolve) => {
+        clientPort.addEventListener('message', ((event: MessageEvent) => {
+          const msg = event.data;
+          if (msg.kind === 'error') {
+            resolve(msg.error);
+          }
+        }) as EventListener);
+
+        clientPort.postMessage({
+          kind: 'request',
+          id: 1,
+          method: 'subscription',
+          path: 'nonCloneableSub',
+          input: undefined,
+        });
+      });
+
+      // Assert
+      expect(error).toBeTruthy();
+      expect((error as { message: string }).message).toContain(
+        'could not be cloned',
+      );
     });
   });
 

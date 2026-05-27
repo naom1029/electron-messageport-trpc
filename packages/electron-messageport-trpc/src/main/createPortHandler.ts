@@ -56,6 +56,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
 ): PortHandler {
   const { port, router } = opts;
   const subscriptions = new Map<number, AbortController>();
+  let destroyed = false;
 
   function send(msg: ServerMessage): void {
     port.postMessage(msg);
@@ -202,6 +203,10 @@ export function createPortHandler<TRouter extends AnyRouter>(
 
   return {
     destroy() {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
       cleanup();
       port.close();
     },

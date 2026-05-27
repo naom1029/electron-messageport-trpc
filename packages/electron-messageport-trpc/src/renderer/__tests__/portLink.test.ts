@@ -174,6 +174,26 @@ describe('portLink', () => {
     });
   });
 
+  describe('clone failures', () => {
+    it('should reject when request input cannot be cloned', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const client = createTRPCClient<AppRouter>({
+        links: [portLink({ port: clientPort })],
+      });
+
+      const proxy = new Proxy({ name: 'Proxy' }, {});
+
+      // Act & Assert
+      await expect(client.greet.query(proxy)).rejects.toThrow(
+        /could not be cloned/,
+      );
+    });
+  });
+
   describe('port as Promise', () => {
     it('should accept a Promise<MessagePort> and resolve it', async () => {
       // Arrange

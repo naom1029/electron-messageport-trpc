@@ -179,6 +179,7 @@ import { createParentPortHandler } from 'electron-messageport-trpc/utility';
 - Treat each MessagePort passed to this package as dedicated to the electron-messageport-trpc protocol.
 - Do not use the same MessagePort for app-defined `postMessage()` traffic.
 - Messages that do not match the electron-messageport-trpc protocol are discarded.
+- Inputs and results are sent through `MessagePort.postMessage()`. Values that cannot be cloned by the platform Structured Clone algorithm reject on the client side.
 
 ## Examples and Docs
 
