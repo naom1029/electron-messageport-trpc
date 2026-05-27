@@ -105,7 +105,9 @@ describe('mainPortLink', () => {
 
     const proxy = new Proxy({ name: 'Proxy' }, {});
 
-    await expect(client.greet.query(proxy)).rejects.toThrow();
+    await expect(client.greet.query(proxy)).rejects.toThrow(
+      /could not be cloned/,
+    );
   });
 
   it('streams subscription values through a MessagePortMain-compatible client', async () => {

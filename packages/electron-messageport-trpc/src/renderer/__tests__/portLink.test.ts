@@ -188,7 +188,9 @@ describe('portLink', () => {
       const proxy = new Proxy({ name: 'Proxy' }, {});
 
       // Act & Assert
-      await expect(client.greet.query(proxy)).rejects.toThrow();
+      await expect(client.greet.query(proxy)).rejects.toThrow(
+        /could not be cloned/,
+      );
     });
   });
 
