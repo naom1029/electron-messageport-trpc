@@ -65,11 +65,7 @@ export interface TRPCPortResultStopped {
 export interface TRPCPortError {
   kind: 'error';
   id: number;
-  error: {
-    code: number;
-    message: string;
-    data: unknown;
-  };
+  error: unknown;
 }
 
 export type ServerMessage =

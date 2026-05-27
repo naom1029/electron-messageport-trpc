@@ -1,4 +1,5 @@
 import type { AnyRouter } from '@trpc/server';
+import type { DataTransformerOptions } from '../shared/transformer';
 import type { PortHandler } from './createPortHandler';
 import { createPortHandler } from './createPortHandler';
 import { createPortBroker } from './portBroker';
@@ -23,6 +24,7 @@ export interface CreateWindowMessagePortHandlerOptions<
   router: TRouter;
   windows: readonly TWindow[];
   createContext?: (opts: { window: TWindow }) => Promise<unknown>;
+  transformer?: DataTransformerOptions;
 }
 
 export interface WindowMessagePortHandler {
@@ -52,6 +54,7 @@ export function createWindowMessagePortHandler<
       handler = createPortHandler({
         port: serverPort,
         router: opts.router,
+        transformer: opts.transformer,
         createContext: createContext
           ? async () => createContext({ window })
           : undefined,

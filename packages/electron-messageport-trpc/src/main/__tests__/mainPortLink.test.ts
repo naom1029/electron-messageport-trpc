@@ -5,6 +5,30 @@ import { MockMessagePortMain } from '../../shared/__tests__/mockPort';
 import { createPortHandler } from '../createPortHandler';
 import { mainPortLink } from '../mainPortLink';
 
+class CustomValue {
+  constructor(readonly value: string) {}
+}
+
+const customTransformer = {
+  serialize(value: unknown): unknown {
+    if (value instanceof CustomValue) {
+      return { __customValue: true, value: value.value };
+    }
+    return value;
+  },
+  deserialize(value: unknown): unknown {
+    if (
+      value &&
+      typeof value === 'object' &&
+      '__customValue' in value &&
+      (value as { __customValue: unknown }).__customValue === true
+    ) {
+      return new CustomValue(String((value as { value: unknown }).value));
+    }
+    return value;
+  },
+};
+
 function setupRouter() {
   const t = initTRPC.create();
 
@@ -26,6 +50,18 @@ function setupRouter() {
 }
 
 type AppRouter = ReturnType<typeof setupRouter>;
+
+function setupTransformerRouter() {
+  const t = initTRPC.create({ transformer: customTransformer });
+
+  return t.router({
+    custom: t.procedure
+      .input((value: unknown) => value as CustomValue)
+      .query(({ input }) => new CustomValue(`${input.value}:server`)),
+  });
+}
+
+type TransformerRouter = ReturnType<typeof setupTransformerRouter>;
 
 describe('mainPortLink', () => {
   it('resolves queries through a MessagePortMain-compatible client', async () => {
@@ -108,6 +144,21 @@ describe('mainPortLink', () => {
     await expect(client.greet.query(proxy)).rejects.toThrow(
       /could not be cloned/,
     );
+  });
+
+  it('serializes input and deserializes output with the configured transformer', async () => {
+    const router = setupTransformerRouter();
+    const [clientPort, serverPort] = MockMessagePortMain.createPair();
+    createPortHandler({ port: serverPort, router });
+
+    const client = createTRPCClient<TransformerRouter>({
+      links: [mainPortLink({ port: clientPort, transformer: customTransformer })],
+    });
+
+    const result = await client.custom.query(new CustomValue('main'));
+
+    expect(result).toBeInstanceOf(CustomValue);
+    expect(result.value).toBe('main:server');
   });
 
   it('streams subscription values through a MessagePortMain-compatible client', async () => {
