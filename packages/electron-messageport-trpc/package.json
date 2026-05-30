@@ -81,7 +81,7 @@
     "@vitest/coverage-v8": "^4.1.0",
     "electron": "^42.2.0",
     "typescript": "^6.0.2",
-    "vite": "^8.0.5",
+    "vite": "^8.0.13",
     "vitest": "^4.1.0"
   }
 }
