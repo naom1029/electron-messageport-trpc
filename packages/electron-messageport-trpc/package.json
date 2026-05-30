@@ -1,6 +1,6 @@
 {
   "name": "electron-messageport-trpc",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "MessagePort-based tRPC v11 transport for Electron",
   "type": "module",
   "license": "MIT",
