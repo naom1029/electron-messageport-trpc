@@ -14,7 +14,15 @@ export interface TRPCPortSubscriptionStop {
   id: number;
 }
 
-export type ClientMessage = TRPCPortRequest | TRPCPortSubscriptionStop;
+export interface TRPCPortRequestAbort {
+  kind: 'request.abort';
+  id: number;
+}
+
+export type ClientMessage =
+  | TRPCPortRequest
+  | TRPCPortSubscriptionStop
+  | TRPCPortRequestAbort;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && !Array.isArray(value) && typeof value === 'object';
@@ -26,6 +34,10 @@ export function isClientMessage(value: unknown): value is ClientMessage {
   }
 
   if (value.kind === 'subscription.stop') {
+    return typeof value.id === 'number';
+  }
+
+  if (value.kind === 'request.abort') {
     return typeof value.id === 'number';
   }
 

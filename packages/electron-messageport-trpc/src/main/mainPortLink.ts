@@ -40,6 +40,15 @@ interface PendingRequest {
   type: 'query' | 'mutation' | 'subscription';
 }
 
+function createAbortError(): Error {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException('AbortError', 'AbortError');
+  }
+  const error = new Error('AbortError');
+  error.name = 'AbortError';
+  return error;
+}
+
 export function mainPortLink<TRouter extends AnyRouter>(
   opts: MainPortLinkOptions,
 ): TRPCLink<TRouter> {
@@ -100,6 +109,57 @@ export function mainPortLink<TRouter extends AnyRouter>(
     return ({ op }) => {
       return observable((observer) => {
         const id = nextRequestId();
+        let abortListener: (() => void) | null = null;
+
+        function cleanupPending(): boolean {
+          const hadPending = pending.delete(id);
+          if (abortListener) {
+            op.signal?.removeEventListener('abort', abortListener);
+            abortListener = null;
+          }
+          return hadPending;
+        }
+
+        function sendAbort(kind: 'request.abort' | 'subscription.stop'): void {
+          const message: ClientMessage = { kind, id };
+          if (resolvedPort) {
+            try {
+              resolvedPort.postMessage(message);
+            } catch {
+              // The operation is already being torn down.
+            }
+            return;
+          }
+
+          ensurePort()
+            .then((port) => {
+              try {
+                port.postMessage(message);
+              } catch {
+                // The operation is already being torn down.
+              }
+            })
+            .catch(() => {
+              // The operation is already being torn down.
+            });
+        }
+
+        abortListener = () => {
+          if (!cleanupPending()) {
+            return;
+          }
+          sendAbort(
+            op.type === 'subscription' ? 'subscription.stop' : 'request.abort',
+          );
+          observer.error(TRPCClientError.from(createAbortError()));
+        };
+
+        if (op.signal?.aborted) {
+          observer.error(TRPCClientError.from(createAbortError()));
+          return () => {};
+        }
+
+        op.signal?.addEventListener('abort', abortListener, { once: true });
 
         pending.set(id, {
           type: op.type,
@@ -110,12 +170,14 @@ export function mainPortLink<TRouter extends AnyRouter>(
             observer.next({ result: { type: 'started' } });
           },
           onComplete() {
+            cleanupPending();
             observer.complete();
           },
           onStopped() {
             observer.next({ result: { type: 'stopped' } });
           },
           onError(error) {
+            cleanupPending();
             observer.error(
               error instanceof TRPCClientError
                 ? error
@@ -128,6 +190,9 @@ export function mainPortLink<TRouter extends AnyRouter>(
 
         ensurePort()
           .then((port) => {
+            if (op.signal?.aborted) {
+              throw createAbortError();
+            }
             const message: ClientMessage = {
               kind: 'request',
               id,
@@ -138,23 +203,17 @@ export function mainPortLink<TRouter extends AnyRouter>(
             port.postMessage(message);
           })
           .catch((error) => {
-            pending.delete(id);
+            cleanupPending();
             observer.error(TRPCClientError.from(error));
           });
 
         return () => {
-          pending.delete(id);
-          if (op.type === 'subscription' && resolvedPort) {
-            const stopMsg: ClientMessage = {
-              kind: 'subscription.stop',
-              id,
-            };
-            try {
-              resolvedPort.postMessage(stopMsg);
-            } catch {
-              // The operation is already being torn down.
-            }
+          if (!cleanupPending()) {
+            return;
           }
+          sendAbort(
+            op.type === 'subscription' ? 'subscription.stop' : 'request.abort',
+          );
         };
       });
     };
