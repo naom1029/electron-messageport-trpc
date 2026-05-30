@@ -134,6 +134,43 @@ console.log(greeting.message);
 await trpc.sendMessage.mutate();
 ```
 
+## Data Transformers
+
+Use the same tRPC data transformer on both sides when your router is configured
+with one.
+
+```typescript
+// electron/router.ts
+import superjson from 'superjson';
+import { initTRPC } from '@trpc/server';
+
+const t = initTRPC.create({
+  transformer: superjson,
+});
+```
+
+```typescript
+// src/trpc.ts
+import superjson from 'superjson';
+import { createTRPCClient } from '@trpc/client';
+import { getPort, portLink } from 'electron-messageport-trpc/renderer';
+import type { AppRouter } from '../electron/router';
+
+export const trpc = createTRPCClient<AppRouter>({
+  links: [
+    portLink({
+      port: getPort(),
+      transformer: superjson,
+    }),
+  ],
+});
+```
+
+For main-process clients, pass the same transformer to `mainPortLink()`. Server
+handlers use the router's configured transformer by default; pass
+`transformer` to `createPortHandler()` or `createWindowMessagePortHandler()` only
+when you need to override that behavior.
+
 ## Entry Points
 
 | Entry point | Use it from | Purpose |
@@ -179,7 +216,8 @@ import { createParentPortHandler } from 'electron-messageport-trpc/utility';
 - Treat each MessagePort passed to this package as dedicated to the electron-messageport-trpc protocol.
 - Do not use the same MessagePort for app-defined `postMessage()` traffic.
 - Messages that do not match the electron-messageport-trpc protocol are discarded.
-- Inputs and results are sent through `MessagePort.postMessage()`. Values that cannot be cloned by the platform Structured Clone algorithm reject on the client side.
+- Inputs and results are sent through `MessagePort.postMessage()` after any configured tRPC transformer runs. Values that still cannot be cloned by the platform Structured Clone algorithm reject on the client side.
+- Blob support is not provided by the transformer path. Use `ArrayBuffer` or `Uint8Array` for binary payloads.
 
 ## Examples and Docs
 

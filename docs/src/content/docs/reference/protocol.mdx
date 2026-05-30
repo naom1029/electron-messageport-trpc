@@ -11,7 +11,7 @@ This page documents the low-level message protocol used over the MessagePort. Yo
 All messages are sent via `port.postMessage()` and received via the `message` event. Because MessagePort uses the Structured Clone algorithm, messages are not serialized to JSON -- objects are transferred natively.
 </Aside>
 
-Values that cannot be cloned by the platform Structured Clone algorithm, such as JavaScript `Proxy` objects, cannot be sent over this transport.
+When a tRPC data transformer is configured, request inputs, response data, and error shapes are transformed before they are posted to the port and transformed back after they are received. Values that still cannot be cloned by the platform Structured Clone algorithm, such as JavaScript `Proxy` objects without a transformer that converts them, cannot be sent over this transport.
 
 ## Client to Server Messages
 
@@ -36,7 +36,7 @@ interface TRPCPortRequest {
 | `id` | `number` | Unique request identifier (monotonically increasing) |
 | `method` | `'query' \| 'mutation' \| 'subscription'` | The tRPC procedure type |
 | `path` | `string` | Dot-separated procedure path (e.g., `'user.getById'`) |
-| `input` | `unknown` | The procedure input, transferred via Structured Clone |
+| `input` | `unknown` | The procedure input after any configured input transformer, transferred via Structured Clone |
 | `lastEventId` | `string \| undefined` | For subscription resumption (optional) |
 
 ### Subscription Stop
@@ -76,7 +76,7 @@ interface TRPCPortResultData {
 | `kind` | `'result'` | Message discriminator |
 | `id` | `number` | The request ID this result belongs to |
 | `type` | `'data'` | Result type discriminator |
-| `data` | `unknown` | The procedure result, transferred via Structured Clone |
+| `data` | `unknown` | The procedure result after any configured output transformer, transferred via Structured Clone |
 | `eventId` | `string \| undefined` | The tracked event ID for resumable subscription data |
 
 For **queries and mutations**, a single `data` result is sent, and the request is complete.
@@ -129,11 +129,7 @@ Sent when a procedure throws an error.
 interface TRPCPortError {
   kind: 'error';
   id: number;
-  error: {
-    code: number;
-    message: string;
-    data: unknown;
-  };
+  error: unknown;
 }
 ```
 
@@ -141,9 +137,7 @@ interface TRPCPortError {
 |---|---|---|
 | `kind` | `'error'` | Message discriminator |
 | `id` | `number` | The request ID that caused the error |
-| `error.code` | `number` | tRPC error code (matches HTTP status codes) |
-| `error.message` | `string` | Human-readable error message |
-| `error.data` | `unknown` | Additional error metadata (tRPC error shape data) |
+| `error` | `unknown` | The tRPC error shape after any configured output transformer |
 
 ## Message Flow Examples
 
