@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/naom1029/electron-messageport-trpc/compare/electron-messageport-trpc-v0.3.2...electron-messageport-trpc-v0.4.0) (2026-05-30)
+
+
+### Features
+
+* Support tRPC data transformers ([#74](https://github.com/naom1029/electron-messageport-trpc/issues/74)) ([f0cf6eb](https://github.com/naom1029/electron-messageport-trpc/commit/f0cf6eb964a03c47498e6d5d43da1fd898a61119))
+
 ## [0.3.2](https://github.com/naom1029/electron-messageport-trpc/compare/electron-messageport-trpc-v0.3.1...electron-messageport-trpc-v0.3.2) (2026-05-27)
 
 
