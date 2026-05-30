@@ -152,7 +152,9 @@ describe('mainPortLink', () => {
     createPortHandler({ port: serverPort, router });
 
     const client = createTRPCClient<TransformerRouter>({
-      links: [mainPortLink({ port: clientPort, transformer: customTransformer })],
+      links: [
+        mainPortLink({ port: clientPort, transformer: customTransformer }),
+      ],
     });
 
     const result = await client.custom.query(new CustomValue('main'));
