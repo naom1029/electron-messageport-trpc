@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/naom1029/electron-messageport-trpc/compare/electron-messageport-trpc-v0.4.0...electron-messageport-trpc-v0.4.1) (2026-05-30)
+
+
+### Bug Fixes
+
+* propagate query aborts over MessagePort links ([#76](https://github.com/naom1029/electron-messageport-trpc/issues/76)) ([c2eeeec](https://github.com/naom1029/electron-messageport-trpc/commit/c2eeeecf1ad2d59c8f26398ee3ab9d7356d57670))
+
 ## [0.4.0](https://github.com/naom1029/electron-messageport-trpc/compare/electron-messageport-trpc-v0.3.2...electron-messageport-trpc-v0.4.0) (2026-05-30)
 
 
