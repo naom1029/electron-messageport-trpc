@@ -1,4 +1,4 @@
-import { TRPCClientError, createTRPCClient } from '@trpc/client';
+import { createTRPCClient, TRPCClientError } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
 import { describe, expect, it } from 'vitest';
 import { MockMessagePortMain } from '../../shared/__tests__/mockPort';

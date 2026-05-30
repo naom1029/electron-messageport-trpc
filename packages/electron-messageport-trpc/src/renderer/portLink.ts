@@ -150,7 +150,9 @@ export function portLink<TRouter extends AnyRouter>(
           if (!cleanupPending()) {
             return;
           }
-          sendAbort(op.type === 'subscription' ? 'subscription.stop' : 'request.abort');
+          sendAbort(
+            op.type === 'subscription' ? 'subscription.stop' : 'request.abort',
+          );
           observer.error(TRPCClientError.from(createAbortError()));
         };
 
@@ -211,7 +213,9 @@ export function portLink<TRouter extends AnyRouter>(
           if (!cleanupPending()) {
             return;
           }
-          sendAbort(op.type === 'subscription' ? 'subscription.stop' : 'request.abort');
+          sendAbort(
+            op.type === 'subscription' ? 'subscription.stop' : 'request.abort',
+          );
         };
       });
     };
