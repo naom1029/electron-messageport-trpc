@@ -5,6 +5,30 @@ import { createPortHandler } from '../../main/createPortHandler';
 import { createBridgedPair } from '../../shared/__tests__/mockBridge';
 import { portLink } from '../portLink';
 
+class CustomValue {
+  constructor(readonly value: string) {}
+}
+
+const customTransformer = {
+  serialize(value: unknown): unknown {
+    if (value instanceof CustomValue) {
+      return { __customValue: true, value: value.value };
+    }
+    return value;
+  },
+  deserialize(value: unknown): unknown {
+    if (
+      value &&
+      typeof value === 'object' &&
+      '__customValue' in value &&
+      (value as { __customValue: unknown }).__customValue === true
+    ) {
+      return new CustomValue(String((value as { value: unknown }).value));
+    }
+    return value;
+  },
+};
+
 function setupRouter() {
   const t = initTRPC.create();
   return t.router({
@@ -30,6 +54,17 @@ function setupRouter() {
 }
 
 type AppRouter = ReturnType<typeof setupRouter>;
+
+function setupTransformerRouter() {
+  const t = initTRPC.create({ transformer: customTransformer });
+  return t.router({
+    custom: t.procedure
+      .input((value: unknown) => value as CustomValue)
+      .query(({ input }) => new CustomValue(`${input.value}:server`)),
+  });
+}
+
+type TransformerRouter = ReturnType<typeof setupTransformerRouter>;
 
 describe('portLink', () => {
   describe('query - full round trip', () => {
@@ -191,6 +226,26 @@ describe('portLink', () => {
       await expect(client.greet.query(proxy)).rejects.toThrow(
         /could not be cloned/,
       );
+    });
+  });
+
+  describe('transformer', () => {
+    it('should serialize input and deserialize output with the configured transformer', async () => {
+      // Arrange
+      const router = setupTransformerRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const client = createTRPCClient<TransformerRouter>({
+        links: [portLink({ port: clientPort, transformer: customTransformer })],
+      });
+
+      // Act
+      const result = await client.custom.query(new CustomValue('client'));
+
+      // Assert
+      expect(result).toBeInstanceOf(CustomValue);
+      expect(result.value).toBe('client:server');
     });
   });
 

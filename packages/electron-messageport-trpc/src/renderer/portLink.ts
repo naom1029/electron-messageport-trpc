@@ -5,6 +5,8 @@ import { observable } from '@trpc/server/observable';
 import type { ClientMessage, ServerMessage } from '../shared/protocol';
 import { isServerMessage } from '../shared/protocol';
 import { nextRequestId } from '../shared/requestId';
+import type { DataTransformerOptions } from '../shared/transformer';
+import { getTransformer } from '../shared/transformer';
 
 interface RendererPortLike {
   addEventListener(
@@ -22,6 +24,7 @@ interface RendererPortLike {
 
 export interface PortLinkOptions {
   port: RendererPortLike | Promise<RendererPortLike>;
+  transformer?: DataTransformerOptions;
 }
 
 interface ResultData {
@@ -44,6 +47,7 @@ export function portLink<TRouter extends AnyRouter>(
 ): TRPCLink<TRouter> {
   return () => {
     const portPromise = Promise.resolve(opts.port);
+    const transformer = getTransformer(opts.transformer);
     const pending = new Map<number, PendingRequest>();
     let resolvedPort: RendererPortLike | null = null;
     let initialized = false;
@@ -59,12 +63,17 @@ export function portLink<TRouter extends AnyRouter>(
 
       if (msg.kind === 'error') {
         pending.delete(msg.id);
-        req.onError(TRPCClientError.from({ error: msg.error }));
+        req.onError(
+          TRPCClientError.from({
+            error: transformer.output.deserialize(msg.error),
+          }),
+        );
       } else if (msg.kind === 'result' && msg.type === 'data') {
+        const data = transformer.output.deserialize(msg.data);
         req.onData(
           msg.eventId
-            ? { type: 'data', id: msg.eventId, data: msg.data }
-            : { type: 'data', data: msg.data },
+            ? { type: 'data', id: msg.eventId, data }
+            : { type: 'data', data },
         );
         if (req.type !== 'subscription') {
           pending.delete(msg.id);
@@ -126,7 +135,7 @@ export function portLink<TRouter extends AnyRouter>(
               id,
               method: op.type,
               path: op.path,
-              input: op.input,
+              input: transformer.input.serialize(op.input),
             };
             port.postMessage(message);
           })
