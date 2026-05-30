@@ -61,7 +61,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
   const transformer = getTransformer(
     opts.transformer ?? router._def._config.transformer,
   );
-  const subscriptions = new Map<number, AbortController>();
+  const requests = new Map<number, AbortController>();
   let destroyed = false;
 
   function send(msg: ServerMessage): void {
@@ -133,7 +133,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
         sendError(id, cause, method, path, input);
       }
     } finally {
-      subscriptions.delete(id);
+      requests.delete(id);
     }
   }
 
@@ -143,14 +143,11 @@ export function createPortHandler<TRouter extends AnyRouter>(
       transformer.input.deserialize(msg.input),
       msg.lastEventId,
     );
+    const ac = new AbortController();
+    requests.set(id, ac);
 
     try {
       const ctx = (await opts.createContext?.()) ?? {};
-
-      const ac = method === 'subscription' ? new AbortController() : undefined;
-      if (ac) {
-        subscriptions.set(id, ac);
-      }
 
       const result = await callTRPCProcedure({
         router,
@@ -158,18 +155,17 @@ export function createPortHandler<TRouter extends AnyRouter>(
         type: method,
         getRawInput: async () => input,
         ctx,
-        signal: ac?.signal,
+        signal: ac.signal,
         batchIndex: 0,
       });
 
-      if (method === 'subscription' && isAsyncIterable(result)) {
-        const signal = ac?.signal;
-        if (!signal) {
-          throw new Error('Subscription request is missing an abort signal');
-        }
+      if (ac.signal.aborted) {
+        return;
+      }
 
+      if (method === 'subscription' && isAsyncIterable(result)) {
         send({ kind: 'result', id, type: 'started' });
-        iterateSubscription(id, result, signal, method, path, input);
+        iterateSubscription(id, result, ac.signal, method, path, input);
         return;
       }
 
@@ -184,7 +180,13 @@ export function createPortHandler<TRouter extends AnyRouter>(
         data: transformer.output.serialize(result),
       });
     } catch (cause) {
-      sendError(id, cause, method, path, input);
+      if (!ac.signal.aborted) {
+        sendError(id, cause, method, path, input);
+      }
+    } finally {
+      if (method !== 'subscription') {
+        requests.delete(id);
+      }
     }
   }
 
@@ -196,10 +198,19 @@ export function createPortHandler<TRouter extends AnyRouter>(
     const msg: ClientMessage = event.data;
 
     if (msg.kind === 'subscription.stop') {
-      const ac = subscriptions.get(msg.id);
+      const ac = requests.get(msg.id);
       if (ac) {
         ac.abort();
-        subscriptions.delete(msg.id);
+        requests.delete(msg.id);
+      }
+      return;
+    }
+
+    if (msg.kind === 'request.abort') {
+      const ac = requests.get(msg.id);
+      if (ac) {
+        ac.abort();
+        requests.delete(msg.id);
       }
       return;
     }
@@ -210,10 +221,10 @@ export function createPortHandler<TRouter extends AnyRouter>(
   }
 
   function cleanup(): void {
-    for (const [, ac] of subscriptions) {
+    for (const [, ac] of requests) {
       ac.abort();
     }
-    subscriptions.clear();
+    requests.clear();
   }
 
   port.on('message', handleMessage);

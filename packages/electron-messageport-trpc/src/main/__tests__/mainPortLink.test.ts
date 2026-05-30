@@ -1,4 +1,4 @@
-import { createTRPCClient } from '@trpc/client';
+import { TRPCClientError, createTRPCClient } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
 import { describe, expect, it } from 'vitest';
 import { MockMessagePortMain } from '../../shared/__tests__/mockPort';
@@ -144,6 +144,61 @@ describe('mainPortLink', () => {
     await expect(client.greet.query(proxy)).rejects.toThrow(
       /could not be cloned/,
     );
+  });
+
+  it('propagates query aborts to the server procedure', async () => {
+    const t = initTRPC.create();
+    let started = 0;
+    let aborted = 0;
+    let completed = 0;
+    let markStarted: () => void = () => {};
+    const startedPromise = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const router = t.router({
+      slowQuery: t.procedure.query(async ({ signal }) => {
+        started += 1;
+        markStarted();
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            completed += 1;
+            resolve();
+          }, 1_000);
+          signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timeout);
+              aborted += 1;
+              resolve();
+            },
+            { once: true },
+          );
+        });
+
+        return { ok: true };
+      }),
+    });
+    const [clientPort, serverPort] = MockMessagePortMain.createPair();
+    createPortHandler({ port: serverPort, router });
+
+    const client = createTRPCClient<typeof router>({
+      links: [mainPortLink({ port: clientPort })],
+    });
+
+    const controller = new AbortController();
+    const promise = client.slowQuery.query(undefined, {
+      signal: controller.signal,
+    });
+    await startedPromise;
+    controller.abort();
+
+    await expect(promise).rejects.toBeInstanceOf(TRPCClientError);
+    await expect(promise).rejects.toMatchObject({
+      cause: { name: 'AbortError' },
+    });
+    expect(started).toBe(1);
+    expect(aborted).toBe(1);
+    expect(completed).toBe(0);
   });
 
   it('serializes input and deserializes output with the configured transformer', async () => {
