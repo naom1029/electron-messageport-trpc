@@ -11,6 +11,8 @@ import type {
   TRPCPortRequest,
 } from '../shared/protocol';
 import { isClientMessage } from '../shared/protocol';
+import type { DataTransformerOptions } from '../shared/transformer';
+import { getTransformer } from '../shared/transformer';
 
 export interface MessagePortLike {
   on(event: 'message', listener: (event: { data: unknown }) => void): void;
@@ -25,6 +27,7 @@ export interface CreatePortHandlerOptions<TRouter extends AnyRouter> {
   port: MessagePortLike;
   router: TRouter;
   createContext?: () => Promise<unknown>;
+  transformer?: DataTransformerOptions;
 }
 
 export interface PortHandler {
@@ -55,6 +58,9 @@ export function createPortHandler<TRouter extends AnyRouter>(
   opts: CreatePortHandlerOptions<TRouter>,
 ): PortHandler {
   const { port, router } = opts;
+  const transformer = getTransformer(
+    opts.transformer ?? router._def._config.transformer,
+  );
   const subscriptions = new Map<number, AbortController>();
   let destroyed = false;
 
@@ -82,11 +88,11 @@ export function createPortHandler<TRouter extends AnyRouter>(
     send({
       kind: 'error',
       id,
-      error: {
+      error: transformer.output.serialize({
         code: shape.code,
         message: shape.message,
         data: shape.data,
-      },
+      }),
     });
   }
 
@@ -108,10 +114,15 @@ export function createPortHandler<TRouter extends AnyRouter>(
             id,
             type: 'data',
             eventId,
-            data: { id: eventId, data },
+            data: transformer.output.serialize({ id: eventId, data }),
           });
         } else {
-          send({ kind: 'result', id, type: 'data', data: value });
+          send({
+            kind: 'result',
+            id,
+            type: 'data',
+            data: transformer.output.serialize(value),
+          });
         }
       }
       if (!signal.aborted) {
@@ -128,7 +139,10 @@ export function createPortHandler<TRouter extends AnyRouter>(
 
   async function handleRequest(msg: TRPCPortRequest): Promise<void> {
     const { id, method, path } = msg;
-    const input = inputWithLastEventId(msg.input, msg.lastEventId);
+    const input = inputWithLastEventId(
+      transformer.input.deserialize(msg.input),
+      msg.lastEventId,
+    );
 
     try {
       const ctx = (await opts.createContext?.()) ?? {};
@@ -163,7 +177,12 @@ export function createPortHandler<TRouter extends AnyRouter>(
         throw new Error('Subscription procedure must return an async iterable');
       }
 
-      send({ kind: 'result', id, type: 'data', data: result });
+      send({
+        kind: 'result',
+        id,
+        type: 'data',
+        data: transformer.output.serialize(result),
+      });
     } catch (cause) {
       sendError(id, cause, method, path, input);
     }

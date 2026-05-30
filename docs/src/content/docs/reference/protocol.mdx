@@ -1,195 +1,57 @@
 ---
-title: Message Protocol
-description: Wire protocol used between client and server over MessagePort
+title: MessagePort Transport
+description: Transport-level behavior and constraints
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-This page documents the low-level message protocol used over the MessagePort. You do not need to know this to use the library, but it is useful for debugging or building custom integrations.
+This package uses an internal MessagePort protocol between its client links and
+server handlers. The message shape is private implementation detail, not a
+public API. Use `portLink()`, `mainPortLink()`, `createPortHandler()`, or
+`createWindowMessagePortHandler()` instead of posting protocol messages
+manually.
 
 <Aside type="note">
-All messages are sent via `port.postMessage()` and received via the `message` event. Because MessagePort uses the Structured Clone algorithm, messages are not serialized to JSON -- objects are transferred natively.
+Each MessagePort passed to this package should be dedicated to
+electron-messageport-trpc traffic. Do not mix application-defined
+`postMessage()` traffic on the same port.
 </Aside>
 
-Values that cannot be cloned by the platform Structured Clone algorithm, such as JavaScript `Proxy` objects, cannot be sent over this transport.
+## Data Flow
 
-## Client to Server Messages
+Request inputs, response data, and error shapes are sent through
+`MessagePort.postMessage()`.
 
-### Request
+When a tRPC data transformer is configured, values are transformed before they
+are posted to the port and transformed back after they are received:
 
-Sent when the client initiates a query, mutation, or subscription.
+- client input: `transformer.input.serialize()`
+- server input: `transformer.input.deserialize()`
+- server result and error shapes: `transformer.output.serialize()`
+- client result and error shapes: `transformer.output.deserialize()`
 
-```typescript
-interface TRPCPortRequest {
-  kind: 'request';
-  id: number;
-  method: 'query' | 'mutation' | 'subscription';
-  path: string;
-  input: unknown;
-  lastEventId?: string;
-}
-```
+This mirrors the data-transformer behavior users expect from tRPC links, while
+still using MessagePort as the underlying transport.
 
-| Field | Type | Description |
-|---|---|---|
-| `kind` | `'request'` | Message discriminator |
-| `id` | `number` | Unique request identifier (monotonically increasing) |
-| `method` | `'query' \| 'mutation' \| 'subscription'` | The tRPC procedure type |
-| `path` | `string` | Dot-separated procedure path (e.g., `'user.getById'`) |
-| `input` | `unknown` | The procedure input, transferred via Structured Clone |
-| `lastEventId` | `string \| undefined` | For subscription resumption (optional) |
+## Structured Clone
 
-### Subscription Stop
+After any configured transformer runs, the value must still be accepted by the
+platform Structured Clone implementation used by Electron MessagePort.
 
-Sent when the client unsubscribes from an active subscription.
+Values such as JavaScript `Proxy` objects cannot be posted directly. Configure a
+tRPC transformer when you need those values converted into clone-safe data before
+transport.
 
-```typescript
-interface TRPCPortSubscriptionStop {
-  kind: 'subscription.stop';
-  id: number;
-}
-```
+## Binary Data
 
-| Field | Type | Description |
-|---|---|---|
-| `kind` | `'subscription.stop'` | Message discriminator |
-| `id` | `number` | The ID of the subscription to stop |
+`Uint8Array` and `ArrayBuffer` are supported by the MessagePort transport.
 
-## Server to Client Messages
+`Blob` is not currently supported as a MessagePort payload in this package.
+Electron renderer-to-main MessagePort transfer can deliver Blob-containing
+messages as `null` without throwing from `postMessage()`. Use `ArrayBuffer` or
+`Uint8Array` for binary payloads.
 
-### Result (Data)
+## Compatibility Notes
 
-Sent when a procedure returns data or a subscription yields a value.
-
-```typescript
-interface TRPCPortResultData {
-  kind: 'result';
-  id: number;
-  type: 'data';
-  data: unknown;
-  eventId?: string;
-}
-```
-
-| Field | Type | Description |
-|---|---|---|
-| `kind` | `'result'` | Message discriminator |
-| `id` | `number` | The request ID this result belongs to |
-| `type` | `'data'` | Result type discriminator |
-| `data` | `unknown` | The procedure result, transferred via Structured Clone |
-| `eventId` | `string \| undefined` | The tracked event ID for resumable subscription data |
-
-For **queries and mutations**, a single `data` result is sent, and the request is complete.
-
-For **subscriptions**, multiple `data` results may be sent over time.
-
-When a subscription yields `tracked(id, data)`, the protocol sends `eventId: id` and `data: { id, data }`, matching tRPC v11's tracked subscription output shape.
-
-### Result (Started)
-
-Sent after a subscription procedure has started successfully.
-
-```typescript
-interface TRPCPortResultStarted {
-  kind: 'result';
-  id: number;
-  type: 'started';
-}
-```
-
-| Field | Type | Description |
-|---|---|---|
-| `kind` | `'result'` | Message discriminator |
-| `id` | `number` | The subscription ID |
-| `type` | `'started'` | Indicates the subscription has started |
-
-### Result (Stopped)
-
-Sent when a subscription ends naturally (the async iterable completes).
-
-```typescript
-interface TRPCPortResultStopped {
-  kind: 'result';
-  id: number;
-  type: 'stopped';
-}
-```
-
-| Field | Type | Description |
-|---|---|---|
-| `kind` | `'result'` | Message discriminator |
-| `id` | `number` | The subscription ID |
-| `type` | `'stopped'` | Indicates the subscription has ended |
-
-### Error
-
-Sent when a procedure throws an error.
-
-```typescript
-interface TRPCPortError {
-  kind: 'error';
-  id: number;
-  error: {
-    code: number;
-    message: string;
-    data: unknown;
-  };
-}
-```
-
-| Field | Type | Description |
-|---|---|---|
-| `kind` | `'error'` | Message discriminator |
-| `id` | `number` | The request ID that caused the error |
-| `error.code` | `number` | tRPC error code (matches HTTP status codes) |
-| `error.message` | `string` | Human-readable error message |
-| `error.data` | `unknown` | Additional error metadata (tRPC error shape data) |
-
-## Message Flow Examples
-
-### Query
-
-```
-Client                          Server
-  |                               |
-  |  { kind: 'request',          |
-  |    method: 'query',          |
-  |    id: 1, path, input }      |
-  |------------------------------>|
-  |                               |
-  |  { kind: 'result',           |
-  |    id: 1, type: 'data',      |
-  |    data }                     |
-  |<------------------------------|
-```
-
-### Subscription
-
-```
-Client                          Server
-  |                               |
-  |  { kind: 'request',          |
-  |    method: 'subscription',   |
-  |    id: 1, path, input }      |
-  |------------------------------>|
-  |                               |
-  |  { kind: 'result',           |
-  |    id: 1, type: 'started' }  |
-  |<------------------------------|
-  |  { kind: 'result',           |
-  |    id: 1, type: 'data', ..}  |
-  |<------------------------------|
-  |  { kind: 'result',           |
-  |    id: 1, type: 'data', ..}  |
-  |<------------------------------|
-  |                               |
-  |  { kind: 'subscription.stop',|
-  |    id: 1 }                   |
-  |------------------------------>|
-  |                               |
-  |  // Or, if the async iterable |
-  |  // completes naturally:      |
-  |  { kind: 'result',           |
-  |    id: 1, type: 'stopped' }  |
-  |<------------------------------|
-```
+This page describes transport behavior, not the official tRPC JSON-RPC wire
+format. The internal MessagePort message shape may change between releases.
