@@ -7,7 +7,7 @@ import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
 ## Prerequisites
 
-- **Node.js** >= 18
+- **Node.js** >= 20
 - **Electron** >= 22
 - **tRPC v11** (`@trpc/server` and `@trpc/client`)
 
@@ -31,9 +31,10 @@ import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
   </TabItem>
 </Tabs>
 
-## Package Exports
+## Import Paths
 
-The library ships with four entry points, each targeting a specific Electron process:
+Import the API from the package path that matches the Electron process where the
+code runs:
 
 | Import path | Process | Purpose |
 |---|---|---|
@@ -43,14 +44,14 @@ The library ships with four entry points, each targeting a specific Electron pro
 | `electron-messageport-trpc/utility` | Utility | Attach a tRPC handler to `parentPort` in a utility process |
 
 <Aside type="caution">
-Make sure your bundler configuration resolves these entry points correctly. If you use Electron Forge or electron-vite, the default configuration should work out of the box.
+Make sure your bundler configuration resolves these package paths correctly. If you use Electron Forge or electron-vite, the default configuration should work out of the box.
 </Aside>
 
-## TypeScript Setup
+## Router Type Export
 
-The package includes TypeScript declarations. No additional `@types` packages are needed.
-
-For full type inference on your tRPC router, export the router type from your main process code and import it in your renderer:
+The package includes TypeScript declarations. For tRPC inference, export the
+router type from the process that defines the router and import that type where
+you create a client:
 
 ```typescript
 // main/router.ts
@@ -64,6 +65,4 @@ export const appRouter = t.router({
 export type AppRouter = typeof appRouter;
 ```
 
-## Next Steps
-
-Head to the [Quick Start](/getting-started/quick-start/) guide to wire everything together.
+Next: [Quick Start](/getting-started/quick-start/)

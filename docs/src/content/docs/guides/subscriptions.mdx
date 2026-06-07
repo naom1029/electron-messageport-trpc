@@ -1,15 +1,14 @@
 ---
 title: Subscriptions
-description: Real-time data streaming using tRPC subscriptions over MessagePort
+description: Use tRPC subscription procedures over Electron MessagePort
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-tRPC v11 uses **async iterables** for subscriptions. This library natively supports them over MessagePort, giving you real-time data streaming between Electron processes.
+Subscription procedures work over the same `portLink()` and `mainPortLink()`
+transport as queries and mutations.
 
 ## Defining a Subscription
-
-Use `t.procedure.subscription()` to define a subscription that yields values over time:
 
 ```typescript
 // src/main/router.ts
@@ -47,7 +46,6 @@ const trpc = createTRPCClient<AppRouter>({
   links: [portLink({ port: getPort() })],
 });
 
-// Subscribe and iterate over values
 const subscription = trpc.onTimer.subscribe(
   { intervalMs: 1000 },
   {
@@ -70,7 +68,6 @@ const subscription = trpc.onTimer.subscribe(
   },
 );
 
-// Later, unsubscribe to stop the stream
 subscription.unsubscribe();
 ```
 
@@ -83,10 +80,6 @@ subscription.unsubscribe();
 5. When the client calls `unsubscribe()`, it sends `{ kind: 'subscription.stop', id }`.
 6. The server aborts the `AbortController`, which signals the async generator to stop.
 7. If the iterable completes naturally, the server sends `{ kind: 'result', type: 'stopped' }`.
-
-<Aside type="note">
-Because MessagePort uses the Structured Clone algorithm, `Date` objects in the subscription data are transferred as real `Date` instances -- no manual parsing needed.
-</Aside>
 
 ## Error Handling
 
