@@ -35,6 +35,37 @@ function setupRouter() {
 
 type AppRouter = ReturnType<typeof setupRouter>;
 
+const customTransformer = {
+  input: {
+    serialize: (value: unknown) => {
+      if (
+        value &&
+        typeof value === 'object' &&
+        'secret' in value &&
+        typeof value.secret === 'string'
+      ) {
+        return { __secret: value.secret };
+      }
+      return value;
+    },
+    deserialize: (value: unknown) => {
+      if (
+        value &&
+        typeof value === 'object' &&
+        '__secret' in value &&
+        typeof value.__secret === 'string'
+      ) {
+        return { secret: value.__secret };
+      }
+      return value;
+    },
+  },
+  output: {
+    serialize: (value: unknown) => value,
+    deserialize: (value: unknown) => value,
+  },
+};
+
 function createUtilityBridge() {
   // Simulate: main creates a channel, sends port1 to utility via parentPort
   const serverPort = new MockMessagePortMain();
@@ -228,5 +259,38 @@ describe('parentPortHandler', () => {
 
     // Assert
     expect(result).toBe('utility');
+  });
+
+  it('should pass transformer to port handlers', async () => {
+    // Arrange
+    const t = initTRPC.create();
+    const router = t.router({
+      revealSecret: t.procedure
+        .input((value: unknown) => value as { secret: string })
+        .query(({ input }) => input.secret.toUpperCase()),
+    });
+
+    const mockParentPort = new MockParentPort();
+    const { serverPort, clientPort } = createUtilityBridge();
+
+    createParentPortHandler({
+      router,
+      parentPort: mockParentPort as ParentPortLike,
+      transformer: customTransformer,
+    });
+
+    mockParentPort.emit('message', { data: null, ports: [serverPort] });
+
+    const client = createTRPCClient<typeof router>({
+      links: [portLink({ port: clientPort, transformer: customTransformer })],
+    });
+
+    // Act
+    const result = await client.revealSecret.query({
+      secret: 'from-transformer',
+    });
+
+    // Assert
+    expect(result).toBe('FROM-TRANSFORMER');
   });
 });

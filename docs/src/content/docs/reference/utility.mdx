@@ -18,6 +18,7 @@ interface CreateParentPortHandlerOptions<TRouter extends AnyRouter> {
   router: TRouter;
   parentPort: ParentPort;
   createContext?: () => Promise<unknown>;
+  transformer?: DataTransformerOptions;
 }
 ```
 
@@ -26,6 +27,7 @@ interface CreateParentPortHandlerOptions<TRouter extends AnyRouter> {
 | `router` | `AnyRouter` | Yes | Your tRPC router instance |
 | `parentPort` | `ParentPort` | Yes | The utility process parent port from `electron` |
 | `createContext` | `() => Promise<unknown>` | No | Factory function called for every request |
+| `transformer` | `DataTransformerOptions` | No | Overrides the router's configured data transformer |
 
 ### Returns
 
