@@ -21,12 +21,14 @@ Creates a tRPC link that communicates over a MessagePort. Use this as a link in 
 ```typescript
 interface PortLinkOptions {
   port: MessagePort | Promise<MessagePort>;
+  transformer?: DataTransformerOptions;
 }
 ```
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `port` | `MessagePort \| Promise<MessagePort>` | Yes | The renderer-side MessagePort, or a promise that resolves to one |
+| `transformer` | `DataTransformerOptions` | No | Data transformer matching the remote router |
 
 ### Returns
 

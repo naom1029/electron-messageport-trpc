@@ -1,9 +1,9 @@
 ---
 title: electron-messageport-trpc
-description: MessagePort-based tRPC v11 transport for Electron
+description: MessagePort transport for tRPC v11 in Electron
 template: splash
 hero:
-  tagline: Type-safe IPC for Electron using tRPC v11 and MessagePort
+  tagline: Use tRPC routers across Electron main, renderer, and utility processes
   actions:
     - text: Get Started
       link: getting-started/introduction/
@@ -16,19 +16,13 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Features
+## What It Gives You
 
 <CardGrid>
-  <Card title="End-to-End Type Safety" icon="approve-check">
-    Full TypeScript inference from your router definition to the renderer client. No more untyped channel names.
+  <Card title="tRPC v11 Over MessagePort" icon="approve-check">
+    Use queries, mutations, subscriptions, inference, middleware, and errors across Electron processes.
   </Card>
-  <Card title="Structured Clone" icon="rocket">
-    MessagePort uses the Structured Clone algorithm -- `Date`, `Map`, `Set`, and `ArrayBuffer` are transferred natively without JSON serialization.
-  </Card>
-  <Card title="Flexible Topology" icon="random">
-    Go beyond the star topology of ipcMain/ipcRenderer. Keep standard renderer-to-main flows, or connect main and renderer clients to utility processes over MessagePort.
-  </Card>
-  <Card title="tRPC v11 Subscriptions" icon="list-format">
-    Real-time streaming via async iterables. Subscribe from the renderer and receive live updates from the main process.
+  <Card title="Flexible Electron Topologies" icon="random">
+    Call utility-process routers from main, or broker renderer-to-utility ports while main stays out of the request path.
   </Card>
 </CardGrid>

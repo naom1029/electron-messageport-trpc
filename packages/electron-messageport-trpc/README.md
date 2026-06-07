@@ -1,17 +1,16 @@
 # electron-messageport-trpc
 
-Type-safe IPC for Electron using MessagePort and tRPC v11.
+MessagePort transport for tRPC v11 in Electron.
 
-This package gives Electron apps a tRPC transport over `MessagePort`, so renderer,
-main, and utility processes can call typed `query`, `mutation`, and
-`subscription` procedures without JSON IPC wrappers.
+This package connects Electron `MessagePort` channels to normal tRPC v11
+clients and routers. It keeps application code close to standard tRPC while
+using MessagePort connections that can be handed to different Electron
+processes.
 
 ## Features
 
-- MessagePort-based transport instead of `ipcMain.handle()` / `ipcRenderer.invoke()`
-- tRPC v11 client link support for queries, mutations, and async-iterable subscriptions
-- Renderer-to-main, main-to-utility, and renderer-to-utility topologies
-- TypeScript types for all entry points
+- tRPC v11 over MessagePort: queries, mutations, subscriptions, inference, middleware, and errors across Electron processes
+- Main-to-utility and renderer-to-utility topologies for offloading work
 
 ## Installation
 
@@ -111,8 +110,8 @@ exposePortReceiver();
 ```
 
 The preload script receives the transferred port from Electron and forwards it to
-the renderer main world. This transfer is why plain `send` / `invoke` IPC is not
-used; Electron MessagePorts must be posted with a transfer list.
+the renderer main world. This is the Electron-specific handoff this package
+wraps so the renderer can use a normal tRPC client link.
 
 ### 4. Create the tRPC client in the renderer
 
@@ -133,43 +132,6 @@ console.log(greeting.message);
 
 await trpc.sendMessage.mutate();
 ```
-
-## Data Transformers
-
-Use the same tRPC data transformer on both sides when your router is configured
-with one.
-
-```typescript
-// electron/router.ts
-import superjson from 'superjson';
-import { initTRPC } from '@trpc/server';
-
-const t = initTRPC.create({
-  transformer: superjson,
-});
-```
-
-```typescript
-// src/trpc.ts
-import superjson from 'superjson';
-import { createTRPCClient } from '@trpc/client';
-import { getPort, portLink } from 'electron-messageport-trpc/renderer';
-import type { AppRouter } from '../electron/router';
-
-export const trpc = createTRPCClient<AppRouter>({
-  links: [
-    portLink({
-      port: getPort(),
-      transformer: superjson,
-    }),
-  ],
-});
-```
-
-For main-process clients, pass the same transformer to `mainPortLink()`. Server
-handlers use the router's configured transformer by default; pass
-`transformer` to `createPortHandler()` or `createWindowMessagePortHandler()` only
-when you need to override that behavior.
 
 ## Entry Points
 
