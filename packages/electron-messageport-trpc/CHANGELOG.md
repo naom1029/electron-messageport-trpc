@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/naom1029/electron-messageport-trpc/compare/electron-messageport-trpc-v0.4.1...electron-messageport-trpc-v0.4.2) (2026-06-07)
+
+
+### Bug Fixes
+
+* **utility:** pass transformer to parent port handler ([#84](https://github.com/naom1029/electron-messageport-trpc/issues/84)) ([78e4eb0](https://github.com/naom1029/electron-messageport-trpc/commit/78e4eb0fb539cc590c86ed14f79403b1dfeecea2))
+
 ## [0.4.1](https://github.com/naom1029/electron-messageport-trpc/compare/electron-messageport-trpc-v0.4.0...electron-messageport-trpc-v0.4.1) (2026-05-30)
 
 
