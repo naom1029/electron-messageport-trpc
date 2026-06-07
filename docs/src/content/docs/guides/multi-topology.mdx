@@ -3,7 +3,7 @@ title: Utility Process Topologies
 description: Utility process communication patterns
 ---
 
-Electron's [utility process](https://www.electronjs.org/docs/latest/api/utility-process) runs in a separate Node.js thread. You can connect it via MessagePort for offloading heavy computation.
+Electron's [utility process](https://www.electronjs.org/docs/latest/api/utility-process) runs in a separate child process. You can connect it via MessagePort for offloading heavy computation.
 
 ## Utility Worker
 
@@ -57,7 +57,9 @@ This keeps the main process out of the request path. It only creates and transfe
 ## Architecture
 
 ```text
-Renderer <== MessagePort ==> Main Process <== parentPort ==> Utility Process
+Main Process <== MessagePort ==> Utility Process
+
+Renderer <== MessagePort brokered by Main ==> Utility Process
 ```
 
 ## Choosing a Topology

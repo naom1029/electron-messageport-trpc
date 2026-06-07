@@ -25,6 +25,7 @@ interface CreateWindowMessagePortHandlerOptions<TRouter extends AnyRouter> {
   router: TRouter;
   windows: readonly BrowserWindow[];
   createContext?: (opts: { window: BrowserWindow }) => Promise<unknown>;
+  transformer?: DataTransformerOptions;
 }
 ```
 
@@ -33,6 +34,7 @@ interface CreateWindowMessagePortHandlerOptions<TRouter extends AnyRouter> {
 | `router` | `AnyRouter` | Yes | Your tRPC router instance |
 | `windows` | `readonly BrowserWindow[]` | Yes | Windows that should receive a renderer-side port |
 | `createContext` | `(opts: { window: BrowserWindow }) => Promise<unknown>` | No | Factory invoked for each request with the matching window |
+| `transformer` | `DataTransformerOptions` | No | Overrides the router's configured data transformer |
 
 ### Returns
 
@@ -64,7 +66,7 @@ app.whenReady().then(() => {
 ```
 
 <Aside type="tip">
-This is the recommended main-process API. It recreates the MessagePort after renderer reloads, so application code does not need to manage `did-finish-load` or handler teardown.
+This is the recommended main-process API for renderer-to-main routers. It wraps the port broker and low-level request handler setup.
 </Aside>
 
 ---
@@ -78,12 +80,14 @@ Creates a tRPC client link for `MessagePortMain`-compatible ports in the main pr
 ```typescript
 interface MainPortLinkOptions {
   port: MessagePortMain | Promise<MessagePortMain>;
+  transformer?: DataTransformerOptions;
 }
 ```
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `port` | `MessagePortMain \| Promise<MessagePortMain>` | Yes | The client-side main-process port |
+| `transformer` | `DataTransformerOptions` | No | Data transformer matching the remote router |
 
 ### Example
 
@@ -166,6 +170,7 @@ interface CreatePortHandlerOptions<TRouter extends AnyRouter> {
   port: MessagePortLike;
   router: TRouter;
   createContext?: () => Promise<unknown>;
+  transformer?: DataTransformerOptions;
 }
 ```
 
@@ -174,6 +179,7 @@ interface CreatePortHandlerOptions<TRouter extends AnyRouter> {
 | `port` | `MessagePortMain` | Yes | The server-side MessagePort (from `createRendererPort`) |
 | `router` | `AnyRouter` | Yes | Your tRPC router instance |
 | `createContext` | `() => Promise<unknown>` | No | Factory function called for every request to create the context object |
+| `transformer` | `DataTransformerOptions` | No | Overrides the router's configured data transformer |
 
 ### Returns
 

@@ -44,12 +44,12 @@ This guide walks through a minimal setup where a **renderer** process calls proc
         },
       });
 
-      win.loadFile('index.html');
-
       createWindowMessagePortHandler({
         router: appRouter,
         windows: [win],
       });
+
+      win.loadFile('index.html');
     });
     ```
 
@@ -74,7 +74,6 @@ This guide walks through a minimal setup where a **renderer** process calls proc
       links: [portLink({ port: getPort() })],
     });
 
-    // Now you can call procedures with full type safety!
     const greeting = await trpc.greet.query({ name: 'World' });
     console.log(greeting); // "Hello, World!"
     ```
@@ -92,7 +91,4 @@ This guide walks through a minimal setup where a **renderer** process calls proc
 The low-level exports are still available if you want custom lifecycle control or direct MessagePort access.
 </Aside>
 
-## Next Steps
-
-- [Subscriptions](/guides/subscriptions/) -- real-time data streaming with tRPC subscriptions
-- [API Reference](/reference/main/) -- detailed documentation for every export
+Next: [Subscriptions](/guides/subscriptions/) or [Main Process API](/reference/main/)

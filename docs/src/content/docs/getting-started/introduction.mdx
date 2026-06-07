@@ -1,28 +1,35 @@
 ---
 title: Introduction
-description: MessagePort-based tRPC v11 transport for Electron
+description: MessagePort transport for tRPC v11 in Electron
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-**electron-messageport-trpc** is a transport layer that connects [tRPC v11](https://trpc.io/) with Electron's [MessagePort](https://www.electronjs.org/docs/latest/tutorial/message-ports) API. It enables type-safe IPC between Electron processes using tRPC's familiar patterns.
+**electron-messageport-trpc** is a transport layer that connects [tRPC v11](https://trpc.io/) clients and routers through Electron's [MessagePort](https://www.electronjs.org/docs/latest/tutorial/message-ports) API.
 
-## Why MessagePort + tRPC?
+It is for Electron apps that already want the tRPC model -- routers,
+procedures, inference, middleware, and subscriptions -- across process
+boundaries, backed by MessagePort connections between Electron processes.
 
-Traditional Electron IPC using `ipcMain` / `ipcRenderer` has limitations:
+## What This Library Adds
 
-- **Star topology** -- all communication must pass through the main process
-- **No type safety** -- channel names are plain strings with no compile-time checks
-- **JSON serialization** -- `Date`, `Map`, `Set`, and other complex types are lost
+Electron gives you IPC primitives. tRPC gives you typed routers and clients.
+This library connects the two without asking you to design a custom channel
+protocol for every procedure.
 
-This library solves all three problems:
+| Capability | What the package provides |
+|---|---|
+| tRPC v11 over MessagePort | Queries, mutations, subscriptions, inference, middleware, and errors across Electron processes |
+| Utility processes | Main-to-utility and renderer-to-utility topologies |
 
-| Feature | ipcMain/ipcRenderer | electron-messageport-trpc |
-|---|---|---|
-| Topology | Star (main as hub) | Flexible (renderer-to-main, main-to-utility, renderer-to-utility) |
-| Type safety | None | Full end-to-end via tRPC |
-| Serialization | JSON.stringify | Structured Clone (native `Date`, `Map`, `Set`) |
-| Subscriptions | Manual event listeners | tRPC subscriptions (async iterables) |
+## Supported Topologies
+
+- **Renderer to main**: the default Electron app shape. A renderer tRPC client
+  calls a router hosted in the main process.
+- **Main to utility**: the main process calls a router hosted in an Electron
+  utility process.
+- **Renderer to utility**: the main process brokers the port, then the renderer
+  talks to the utility process without main handling each request.
 
 ## How It Works
 
@@ -39,11 +46,9 @@ Renderer                Main Process
 
 1. The **main process** creates a `MessageChannelMain` and sends one port to the renderer via `webContents.postMessage`.
 2. The **preload script** receives the port and exposes it to the renderer via `contextBridge`.
-3. The **renderer** uses the port as a tRPC link, gaining full type-safe RPC with subscriptions.
-
-<Aside type="tip">
-Because MessagePort uses the [Structured Clone algorithm](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm), values like `Date`, `Map`, `Set`, `ArrayBuffer`, and `Error` are transferred natively -- no JSON serialization needed.
-</Aside>
+3. The **renderer** uses the port as a tRPC link, so `query`, `mutation`, and
+   `subscription` procedures use the same typed client API as the rest of your
+   tRPC code.
 
 ## Architecture Overview
 

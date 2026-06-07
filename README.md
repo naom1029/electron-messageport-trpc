@@ -4,16 +4,19 @@
 ![CI](https://github.com/naom1029/electron-messageport-trpc/actions/workflows/ci.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-Type-safe IPC for Electron using MessagePort and tRPC v11.
+MessagePort transport for tRPC v11 in Electron.
+
+`electron-messageport-trpc` lets Electron renderers, the main process, and
+utility processes talk through normal tRPC clients and routers. It keeps the
+tRPC programming model while using MessagePort connections that can be handed
+to different Electron processes.
 
 ## Features
 
-- **MessagePort-based transport** -- uses MessagePort instead of ipcMain/ipcRenderer
-- **tRPC v11 native** -- async iterables for subscriptions
-- **Flexible topology** -- renderer-to-main, main-to-utility, and renderer-to-utility
-- **Structured Clone serialization** -- native Date, Map, Set, ArrayBuffer support
-- **Full TypeScript support**
-- **4 entry points** -- `/main`, `/renderer`, `/preload`, `/utility`
+- **tRPC v11 over MessagePort** -- use queries, mutations, subscriptions,
+  inference, middleware, and errors across Electron processes.
+- **Flexible Electron topologies** -- call utility-process routers from main, or
+  broker renderer-to-utility ports while main stays out of the request path.
 
 ## Installation
 
@@ -28,7 +31,7 @@ npm install electron-messageport-trpc
 yarn add electron-messageport-trpc
 ```
 
-You also need the tRPC v11 peer dependencies:
+Install the tRPC v11 peer dependencies as well:
 
 ```bash
 pnpm add @trpc/server @trpc/client
@@ -82,8 +85,8 @@ client.events.subscribe(undefined, {
 | Dependency | Version |
 |---|---|
 | Electron | >= 22 |
-| @trpc/server | ^11.0.0 |
-| @trpc/client | ^11.0.0 |
+| @trpc/server | ^11.17.0 |
+| @trpc/client | ^11.17.0 |
 | Node.js | >= 20 |
 
 ## Documentation
