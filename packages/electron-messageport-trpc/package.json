@@ -10,7 +10,7 @@
     "url": "https://github.com/naom1029/electron-messageport-trpc.git",
     "directory": "packages/electron-messageport-trpc"
   },
-  "homepage": "https://github.com/naom1029/electron-messageport-trpc",
+  "homepage": "https://naom1029.github.io/electron-messageport-trpc/",
   "bugs": {
     "url": "https://github.com/naom1029/electron-messageport-trpc/issues"
   },
