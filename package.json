@@ -16,8 +16,8 @@
     "release": "pnpm build"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.10",
-    "knip": "^6.1.0",
+    "@biomejs/biome": "^2.4.16",
+    "knip": "^6.16.1",
     "typescript": "^6.0.3"
   }
 }
