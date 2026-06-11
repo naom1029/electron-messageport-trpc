@@ -5,8 +5,8 @@ description: Use tRPC subscription procedures over Electron MessagePort
 
 import { Aside } from '@astrojs/starlight/components';
 
-Subscription procedures work over the same `portLink()` and `mainPortLink()`
-transport as queries and mutations.
+Subscription procedures work over the same typed MessagePort channels as
+queries and mutations.
 
 ## Defining a Subscription
 
@@ -38,15 +38,12 @@ The `signal` parameter is an `AbortSignal` that is triggered when the client uns
 
 ```typescript
 // src/renderer/index.ts
-import { createTRPCClient } from '@trpc/client';
-import { portLink, getPort } from 'electron-messageport-trpc/renderer';
-import type { AppRouter } from '../main/router';
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import { electronTRPC } from '../main/trpc';
 
-const trpc = createTRPCClient<AppRouter>({
-  links: [portLink({ port: getPort() })],
-});
+const trpc = createElectronTRPCClient(electronTRPC);
 
-const subscription = trpc.onTimer.subscribe(
+const subscription = trpc.main.onTimer.subscribe(
   { intervalMs: 1000 },
   {
     onStarted() {

@@ -5,14 +5,27 @@ description: Utility process communication patterns
 
 Electron's [utility process](https://www.electronjs.org/docs/latest/api/utility-process) runs in a separate child process. You can connect it via MessagePort for offloading heavy computation.
 
+## Channel Contract
+
+```typescript
+import { defineElectronTRPC } from 'electron-messageport-trpc';
+import type { UtilityRouter } from './utility-router';
+
+export const electronTRPC = defineElectronTRPC<{
+  worker: UtilityRouter;
+}>();
+```
+
 ## Utility Worker
 
 ```typescript
 // utility-process.ts (runs in a utility process)
-import { createParentPortHandler } from 'electron-messageport-trpc/utility';
+import { createElectronTRPCUtility } from 'electron-messageport-trpc/utility';
+import { electronTRPC } from './trpc';
 import { utilityRouter } from './router';
 
-createParentPortHandler({
+createElectronTRPCUtility({
+  channel: electronTRPC.worker,
   router: utilityRouter,
   parentPort: process.parentPort,
 });
@@ -22,17 +35,14 @@ createParentPortHandler({
 
 ```typescript
 // main process
-import { createTRPCClient } from '@trpc/client';
-import { MessageChannelMain, utilityProcess } from 'electron';
-import { mainPortLink } from 'electron-messageport-trpc/main';
+import { utilityProcess } from 'electron';
+import { createElectronTRPCUtilityClient } from 'electron-messageport-trpc/main';
+import { electronTRPC } from './trpc';
 
 const child = utilityProcess.fork('utility-process.js');
-const { port1, port2 } = new MessageChannelMain();
-
-child.postMessage({ type: 'connect' }, [port1]);
-
-const client = createTRPCClient({
-  links: [mainPortLink({ port: port2 })],
+const client = createElectronTRPCUtilityClient({
+  channel: electronTRPC.worker,
+  utility: child,
 });
 ```
 
@@ -40,15 +50,16 @@ const client = createTRPCClient({
 
 ```typescript
 // main process broker
-import { createPortBroker } from 'electron-messageport-trpc/main';
 import { utilityProcess } from 'electron';
+import { createElectronTRPCRendererUtilityBridge } from 'electron-messageport-trpc/main';
+import { electronTRPC } from './trpc';
 
 const child = utilityProcess.fork('utility-process.js');
-const broker = createPortBroker();
 
-win.webContents.on('did-finish-load', () => {
-  const { serverPort } = broker.createRendererPort(win.webContents);
-  child.postMessage({ type: 'connect' }, [serverPort]);
+createElectronTRPCRendererUtilityBridge({
+  window: win,
+  channel: electronTRPC.worker,
+  utility: child,
 });
 ```
 

@@ -4,6 +4,21 @@ export type {
 } from './createPortHandler';
 export { createPortHandler } from './createPortHandler';
 export type {
+  CreateElectronTRPCMainOptions,
+  CreateElectronTRPCRendererUtilityBridgeOptions,
+  CreateElectronTRPCUtilityClientOptions,
+  CreateElectronTRPCUtilityPoolOptions,
+  ElectronTRPCMainHandler,
+  ElectronTRPCUtilityPool,
+  UtilityProcessLike,
+} from './electronTRPC';
+export {
+  createElectronTRPCMain,
+  createElectronTRPCRendererUtilityBridge,
+  createElectronTRPCUtilityClient,
+  createElectronTRPCUtilityPool,
+} from './electronTRPC';
+export type {
   BrowserWindowLike,
   CreateWindowMessagePortHandlerOptions,
   RendererWebContentsLike,

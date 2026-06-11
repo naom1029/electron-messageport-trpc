@@ -1,7 +1,9 @@
-import { createParentPortHandler } from 'electron-messageport-trpc/utility';
+import { createElectronTRPCUtility } from 'electron-messageport-trpc/utility';
+import { electronTRPC } from '../electron/trpc';
 import { utilityRouter } from './router';
 
-createParentPortHandler({
+createElectronTRPCUtility({
+  channel: electronTRPC.worker,
   router: utilityRouter,
   parentPort: process.parentPort,
 });

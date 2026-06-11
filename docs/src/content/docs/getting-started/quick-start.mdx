@@ -29,13 +29,26 @@ This guide walks through a minimal setup where a **renderer** process calls proc
     export type AppRouter = typeof appRouter;
     ```
 
-2. **Attach your router to the window (main process)**
+2. **Define the Electron tRPC channels**
+
+    ```typescript
+    // src/main/trpc.ts
+    import { defineElectronTRPC } from 'electron-messageport-trpc';
+    import type { AppRouter } from './router';
+
+    export const electronTRPC = defineElectronTRPC<{
+      main: AppRouter;
+    }>();
+    ```
+
+3. **Attach your router to the window (main process)**
 
     ```typescript
     // src/main/index.ts
     import { app, BrowserWindow } from 'electron';
-    import { createWindowMessagePortHandler } from 'electron-messageport-trpc/main';
+    import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
     import { appRouter } from './router';
+    import { electronTRPC } from './trpc';
 
     app.whenReady().then(() => {
       const win = new BrowserWindow({
@@ -44,8 +57,11 @@ This guide walks through a minimal setup where a **renderer** process calls proc
         },
       });
 
-      createWindowMessagePortHandler({
-        router: appRouter,
+      createElectronTRPCMain({
+        channels: electronTRPC,
+        routers: {
+          main: appRouter,
+        },
         windows: [win],
       });
 
@@ -53,28 +69,26 @@ This guide walks through a minimal setup where a **renderer** process calls proc
     });
     ```
 
-3. **Expose the port receiver (preload script)**
+4. **Expose the tRPC bridge (preload script)**
 
     ```typescript
     // src/preload/index.ts
-    import { exposePortReceiver } from 'electron-messageport-trpc/preload';
+    import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
+    import { electronTRPC } from '../main/trpc';
 
-    exposePortReceiver();
+    exposeElectronTRPC(electronTRPC);
     ```
 
-4. **Create the tRPC client (renderer process)**
+5. **Create the tRPC client (renderer process)**
 
     ```typescript
     // src/renderer/index.ts
-    import { createTRPCClient } from '@trpc/client';
-    import { getPort, portLink } from 'electron-messageport-trpc/renderer';
-    import type { AppRouter } from '../main/router';
+    import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+    import { electronTRPC } from '../main/trpc';
 
-    const trpc = createTRPCClient<AppRouter>({
-      links: [portLink({ port: getPort() })],
-    });
+    const trpc = createElectronTRPCClient(electronTRPC);
 
-    const greeting = await trpc.greet.query({ name: 'World' });
+    const greeting = await trpc.main.greet.query({ name: 'World' });
     console.log(greeting); // "Hello, World!"
     ```
 
@@ -82,10 +96,10 @@ This guide walks through a minimal setup where a **renderer** process calls proc
 
 ## What Just Happened?
 
-1. `createWindowMessagePortHandler()` watches each window for `did-finish-load`, creates a new MessagePort pair, and attaches the main-process side to your router.
-2. `exposePortReceiver()` in the preload script receives the transferred port and forwards it into the renderer's main world.
-3. In the renderer, `getPort()` resolves the transferred port and `portLink({ port })` plugs it into a standard tRPC client.
-4. Reloads are handled by the main-process helper, so your application code does not need to manually recreate handlers.
+1. `defineElectronTRPC()` creates a typed channel contract shared by main, preload, and renderer code.
+2. `createElectronTRPCMain()` connects the `main` channel to `appRouter` for each window.
+3. `exposeElectronTRPC()` receives transferred MessagePorts in preload and exposes the bridge to the renderer.
+4. `createElectronTRPCClient()` creates normal tRPC clients for each channel. The MessagePort setup stays inside the Electron helpers.
 
 <Aside type="tip">
 The low-level exports are still available if you want custom lifecycle control or direct MessagePort access.
