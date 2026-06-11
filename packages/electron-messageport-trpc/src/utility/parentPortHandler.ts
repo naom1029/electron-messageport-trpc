@@ -3,6 +3,8 @@ import type { MessagePortLike, PortHandler } from '../main/createPortHandler';
 import { createPortHandler } from '../main/createPortHandler';
 import type { DataTransformerOptions } from '../shared/transformer';
 
+type MaybePromise<T> = T | Promise<T>;
+
 export interface ParentPortLike {
   on(
     event: 'message',
@@ -13,17 +15,33 @@ export interface ParentPortLike {
 export interface CreateParentPortHandlerOptions<TRouter extends AnyRouter> {
   router: TRouter;
   parentPort: ParentPortLike;
-  createContext?: () => Promise<unknown>;
+  channel?: string;
+  createContext?: () => MaybePromise<unknown>;
   transformer?: DataTransformerOptions;
+}
+
+export interface ParentPortHandler {
+  handlers: PortHandler[];
+  destroy(): void;
 }
 
 export function createParentPortHandler<TRouter extends AnyRouter>(
   opts: CreateParentPortHandlerOptions<TRouter>,
-): { handlers: PortHandler[] } {
+): ParentPortHandler {
   const { router, parentPort, createContext, transformer } = opts;
   const handlers: PortHandler[] = [];
+  let destroyed = false;
 
   parentPort.on('message', (event) => {
+    if (destroyed) {
+      return;
+    }
+
+    const channel = (event.data as { channel?: string } | null)?.channel;
+    if (opts.channel && channel !== opts.channel) {
+      return;
+    }
+
     const ports = event.ports;
     if (!ports || ports.length === 0) return;
 
@@ -31,12 +49,24 @@ export function createParentPortHandler<TRouter extends AnyRouter>(
       const handler = createPortHandler({
         port,
         router,
-        createContext,
+        createContext: createContext ? async () => createContext() : undefined,
         transformer,
       });
       handlers.push(handler);
     }
   });
 
-  return { handlers };
+  return {
+    handlers,
+    destroy() {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
+      for (const handler of handlers) {
+        handler.destroy();
+      }
+      handlers.length = 0;
+    },
+  };
 }

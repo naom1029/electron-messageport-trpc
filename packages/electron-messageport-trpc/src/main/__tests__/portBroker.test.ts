@@ -37,7 +37,7 @@ describe('portBroker', () => {
     expect(webContents.postMessage).toHaveBeenCalledOnce();
     expect(webContents.postMessage).toHaveBeenCalledWith(
       expect.any(String),
-      null,
+      { channel: 'default' },
       expect.arrayContaining([expect.any(Object)]),
     );
     expect(result.serverPort).toBeDefined();
@@ -69,5 +69,19 @@ describe('portBroker', () => {
     // Assert
     const channel = webContents.postMessage.mock.calls[0][0];
     expect(channel).toBe('electron-messageport-trpc:init');
+  });
+
+  it('should include the requested tRPC channel in the payload', () => {
+    // Arrange
+    const broker = createPortBroker();
+    const webContents = createMockWebContents();
+
+    // Act
+    broker.createRendererPort(webContents, { channel: 'utility' });
+
+    // Assert
+    expect(webContents.postMessage.mock.calls[0][1]).toEqual({
+      channel: 'utility',
+    });
   });
 });

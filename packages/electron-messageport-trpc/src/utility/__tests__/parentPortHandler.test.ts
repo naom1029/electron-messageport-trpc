@@ -293,4 +293,47 @@ describe('parentPortHandler', () => {
     // Assert
     expect(result).toBe('FROM-TRANSFORMER');
   });
+
+  it('should ignore ports for other channels', async () => {
+    // Arrange
+    const router = setupRouter();
+    const mockParentPort = new MockParentPort();
+    const { serverPort } = createUtilityBridge();
+
+    const handler = createParentPortHandler({
+      router,
+      parentPort: mockParentPort as ParentPortLike,
+      channel: 'worker',
+    });
+
+    // Act
+    mockParentPort.emit('message', {
+      data: { channel: 'other' },
+      ports: [serverPort],
+    });
+
+    // Assert
+    expect(handler.handlers).toHaveLength(0);
+  });
+
+  it('should destroy child port handlers', () => {
+    // Arrange
+    const router = setupRouter();
+    const mockParentPort = new MockParentPort();
+    const { serverPort } = createUtilityBridge();
+
+    const handler = createParentPortHandler({
+      router,
+      parentPort: mockParentPort as ParentPortLike,
+    });
+
+    mockParentPort.emit('message', { data: null, ports: [serverPort] });
+
+    // Act
+    handler.destroy();
+
+    // Assert
+    expect(handler.handlers).toHaveLength(0);
+    expect(serverPort.closed).toBe(true);
+  });
 });

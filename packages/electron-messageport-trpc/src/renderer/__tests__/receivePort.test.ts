@@ -105,6 +105,44 @@ describe('getPort', () => {
     port2.close();
   });
 
+  it('keeps port promises separate by channel', async () => {
+    const windowMock = createWindowWithBridge();
+    vi.stubGlobal('window', windowMock);
+    const { getPort } = await loadReceivePortModule();
+    const { port1: mainPort, port2: mainPeer } = new MessageChannel();
+    const { port1: utilityPort, port2: utilityPeer } = new MessageChannel();
+
+    const mainPromise = getPort({ channel: 'main' });
+    const utilityPromise = getPort({ channel: 'utility' });
+
+    windowMock.dispatchEvent(
+      new MessageEvent('message', {
+        data: { channel: PORT_INIT_CHANNEL, trpcChannel: 'utility' },
+        ports: [utilityPort],
+      }),
+    );
+    windowMock.dispatchEvent(
+      new MessageEvent('message', {
+        data: { channel: PORT_INIT_CHANNEL, trpcChannel: 'main' },
+        ports: [mainPort],
+      }),
+    );
+
+    await expect(mainPromise).resolves.toBe(mainPort);
+    await expect(utilityPromise).resolves.toBe(utilityPort);
+    expect(windowMock.electronTRPCPort.requestPort).toHaveBeenCalledWith(
+      'main',
+    );
+    expect(windowMock.electronTRPCPort.requestPort).toHaveBeenCalledWith(
+      'utility',
+    );
+
+    mainPort.close();
+    mainPeer.close();
+    utilityPort.close();
+    utilityPeer.close();
+  });
+
   it('throws when the preload bridge is unavailable', async () => {
     vi.stubGlobal('window', new EventTarget());
     const { getPort } = await loadReceivePortModule();

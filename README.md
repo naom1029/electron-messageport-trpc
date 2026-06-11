@@ -42,32 +42,41 @@ pnpm add @trpc/server @trpc/client
 ### Main Process
 
 ```typescript
-import { createWindowMessagePortHandler } from 'electron-messageport-trpc/main';
+import { defineElectronTRPC } from 'electron-messageport-trpc';
+import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
 import { appRouter } from './router';
+import type { AppRouter } from './router';
+
+export const electronTRPC = defineElectronTRPC<{
+  main: AppRouter;
+}>();
 
 const win = new BrowserWindow({ /* ... */ });
-createWindowMessagePortHandler({ router: appRouter, windows: [win] });
+createElectronTRPCMain({
+  channels: electronTRPC,
+  routers: { main: appRouter },
+  windows: [win],
+});
 ```
 
 ### Preload
 
 ```typescript
-import { exposePortReceiver } from 'electron-messageport-trpc/preload';
-exposePortReceiver();
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
+import { electronTRPC } from './trpc';
+
+exposeElectronTRPC(electronTRPC);
 ```
 
 ### Renderer
 
 ```typescript
-import { createTRPCClient } from '@trpc/client';
-import { portLink } from 'electron-messageport-trpc/renderer';
-import { getPort } from 'electron-messageport-trpc/renderer';
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import { electronTRPC } from './trpc';
 
-const client = createTRPCClient<AppRouter>({
-  links: [portLink({ port: getPort() })],
-});
+const client = createElectronTRPCClient(electronTRPC);
 
-const result = await client.greeting.query({ name: 'World' });
+const result = await client.main.greeting.query({ name: 'World' });
 ```
 
 ### Subscriptions
