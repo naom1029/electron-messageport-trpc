@@ -179,7 +179,7 @@ import { createParentPortHandler } from 'electron-messageport-trpc/utility';
 - Do not use the same MessagePort for app-defined `postMessage()` traffic.
 - Messages that do not match the electron-messageport-trpc protocol are discarded.
 - Inputs and results are sent through `MessagePort.postMessage()` after any configured tRPC transformer runs. Values that still cannot be cloned by the platform Structured Clone algorithm reject on the client side.
-- Blob support is not provided by the transformer path. Use `ArrayBuffer` or `Uint8Array` for binary payloads.
+- `Blob` values are encoded by the transport before `postMessage()` and restored on the receiving side. `ArrayBuffer`, typed arrays, and other Structured Clone values continue to use the platform transport directly.
 
 ## Examples and Docs
 
