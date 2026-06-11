@@ -1,4 +1,4 @@
 import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
-import { electronTRPC } from '../electron/trpc';
+import type { AppRouter } from '../electron/router';
 
-export const trpc = createElectronTRPCClient(electronTRPC).main;
+export const trpc = createElectronTRPCClient<AppRouter>();

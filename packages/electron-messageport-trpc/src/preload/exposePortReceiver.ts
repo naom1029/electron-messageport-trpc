@@ -11,7 +11,9 @@ function normalizeChannel(channel: string | undefined): string {
   return channel ?? DEFAULT_CHANNEL;
 }
 
-export function exposePortReceiver(_opts: ExposePortReceiverOptions = {}): void {
+export function exposePortReceiver(
+  _opts: ExposePortReceiverOptions = {},
+): void {
   const pendingPorts = new Map<string, MessagePort>();
   const requestedChannels = new Set<string>();
 

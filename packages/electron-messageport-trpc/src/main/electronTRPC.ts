@@ -1,4 +1,5 @@
 import { createTRPCClient, type TRPCClient } from '@trpc/client';
+import type { AnyRouter } from '@trpc/server';
 import { MessageChannelMain } from 'electron';
 import type {
   ElectronTRPCChannel,
@@ -10,8 +11,8 @@ import type { DataTransformerOptions } from '../shared/transformer';
 import type { PortHandler } from './createPortHandler';
 import { createPortHandler } from './createPortHandler';
 import type { BrowserWindowLike } from './createWindowMessagePortHandler';
-import { createPortBroker } from './portBroker';
 import { mainPortLink } from './mainPortLink';
+import { createPortBroker } from './portBroker';
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -27,6 +28,16 @@ export interface UtilityProcessLike {
 
 export interface ElectronTRPCMainHandler {
   destroy(): void;
+}
+
+export interface CreateElectronTRPCMainSingleOptions<
+  TRouter extends AnyRouter,
+  TWindow extends BrowserWindowLike = BrowserWindowLike,
+> {
+  windows: readonly TWindow[];
+  router: TRouter;
+  createContext?: (opts: { window: TWindow }) => MaybePromise<unknown>;
+  transformer?: DataTransformerOptions;
 }
 
 export interface CreateElectronTRPCMainOptions<
@@ -47,10 +58,24 @@ export interface CreateElectronTRPCMainOptions<
 }
 
 export function createElectronTRPCMain<
+  TRouter extends AnyRouter,
+  TWindow extends BrowserWindowLike = BrowserWindowLike,
+>(
+  opts: CreateElectronTRPCMainSingleOptions<TRouter, TWindow>,
+): ElectronTRPCMainHandler;
+export function createElectronTRPCMain<
   TRegistry extends ElectronTRPCRegistry,
   TWindow extends BrowserWindowLike = BrowserWindowLike,
 >(
   opts: CreateElectronTRPCMainOptions<TRegistry, TWindow>,
+): ElectronTRPCMainHandler;
+export function createElectronTRPCMain<
+  TRegistry extends ElectronTRPCRegistry,
+  TWindow extends BrowserWindowLike = BrowserWindowLike,
+>(
+  opts:
+    | CreateElectronTRPCMainSingleOptions<AnyRouter, TWindow>
+    | CreateElectronTRPCMainOptions<TRegistry, TWindow>,
 ): ElectronTRPCMainHandler {
   const broker = createPortBroker();
   let destroyed = false;
@@ -68,6 +93,24 @@ export function createElectronTRPCMain<
         handler.destroy();
       }
       handlers.clear();
+
+      if ('router' in opts) {
+        const { serverPort } = broker.createRendererPort(window.webContents, {
+          channel: undefined,
+        });
+        handlers.set(
+          'default',
+          createPortHandler({
+            port: serverPort,
+            router: opts.router,
+            transformer: opts.transformer,
+            createContext: opts.createContext
+              ? async () => opts.createContext?.({ window })
+              : undefined,
+          }),
+        );
+        return;
+      }
 
       for (const key of Object.keys(opts.routers) as Array<
         keyof TRegistry & string
@@ -220,10 +263,9 @@ export function createElectronTRPCRendererUtilityBridge<
     const { serverPort } = broker.createRendererPort(opts.window.webContents, {
       channel: opts.channel.name,
     });
-    opts.utility.postMessage(
-      { type: 'connect', channel: opts.channel.name },
-      [serverPort],
-    );
+    opts.utility.postMessage({ type: 'connect', channel: opts.channel.name }, [
+      serverPort,
+    ]);
   }
 
   function destroy(): void {

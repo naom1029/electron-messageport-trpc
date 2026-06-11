@@ -13,6 +13,31 @@ import {
 } from 'electron-messageport-trpc/renderer';
 ```
 
+## `createElectronTRPCClient<TRouter>(opts?)`
+
+Creates a typed tRPC client for the default renderer-to-main channel.
+
+```typescript
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import type { AppRouter } from '../main/router';
+
+const trpc = createElectronTRPCClient<AppRouter>();
+
+await trpc.ping.query();
+```
+
+Use this form for a single renderer-to-main router.
+
+### Options
+
+```typescript
+interface CreateElectronTRPCSingleClientOptions {
+  transformer?: DataTransformerOptions;
+}
+```
+
+---
+
 ## `createElectronTRPCClient(channels, opts?)`
 
 Creates typed tRPC clients for every channel defined by `defineElectronTRPC()`.
@@ -26,6 +51,9 @@ const trpc = createElectronTRPCClient(electronTRPC);
 await trpc.main.ping.query();
 await trpc.worker.render.mutate(input);
 ```
+
+Use this form when one renderer talks to multiple typed channels, such as main
+and utility-process routers.
 
 ### Options
 

@@ -1,7 +1,4 @@
-import type {
-  ElectronTRPCChannel,
-  RouterForChannel,
-} from '../core/index';
+import type { ElectronTRPCChannel, RouterForChannel } from '../core/index';
 import type { DataTransformerOptions } from '../shared/transformer';
 import {
   createParentPortHandler,
@@ -21,9 +18,7 @@ export interface CreateElectronTRPCUtilityOptions<
   transformer?: DataTransformerOptions;
 }
 
-export function createElectronTRPCUtility<
-  TChannel extends ElectronTRPCChannel,
->(
+export function createElectronTRPCUtility<TChannel extends ElectronTRPCChannel>(
   opts: CreateElectronTRPCUtilityOptions<TChannel>,
 ): ParentPortHandler {
   return createParentPortHandler({

@@ -42,19 +42,12 @@ pnpm add @trpc/server @trpc/client
 ### Main Process
 
 ```typescript
-import { defineElectronTRPC } from 'electron-messageport-trpc';
 import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
 import { appRouter } from './router';
-import type { AppRouter } from './router';
-
-export const electronTRPC = defineElectronTRPC<{
-  main: AppRouter;
-}>();
 
 const win = new BrowserWindow({ /* ... */ });
 createElectronTRPCMain({
-  channels: electronTRPC,
-  routers: { main: appRouter },
+  router: appRouter,
   windows: [win],
 });
 ```
@@ -63,20 +56,19 @@ createElectronTRPCMain({
 
 ```typescript
 import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
-import { electronTRPC } from './trpc';
 
-exposeElectronTRPC(electronTRPC);
+exposeElectronTRPC();
 ```
 
 ### Renderer
 
 ```typescript
 import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
-import { electronTRPC } from './trpc';
+import type { AppRouter } from './router';
 
-const client = createElectronTRPCClient(electronTRPC);
+const client = createElectronTRPCClient<AppRouter>();
 
-const result = await client.main.greeting.query({ name: 'World' });
+const result = await client.greeting.query({ name: 'World' });
 ```
 
 ### Subscriptions

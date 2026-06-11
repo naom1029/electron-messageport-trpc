@@ -63,7 +63,7 @@ export type AppRouter = typeof appRouter;
 // electron/main.ts
 import path from 'node:path';
 import { app, BrowserWindow } from 'electron';
-import { createWindowMessagePortHandler } from 'electron-messageport-trpc/main';
+import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
 import { appRouter } from './router';
 
 let trpcHandler: { destroy(): void } | undefined;
@@ -79,7 +79,7 @@ async function createWindow() {
     },
   });
 
-  trpcHandler = createWindowMessagePortHandler({
+  trpcHandler = createElectronTRPCMain({
     router: appRouter,
     windows: [win],
     createContext: async ({ window }) => ({ window }),
@@ -95,18 +95,18 @@ app.on('before-quit', () => {
 });
 ```
 
-`createWindowMessagePortHandler()` creates a fresh MessagePort for each window
-load, transfers one side to the renderer, and attaches the other side to your
-router. Pass every window that should use this router, or create one handler per
-window when windows are created dynamically.
+`createElectronTRPCMain()` creates a fresh MessagePort for each window load,
+transfers one side to the renderer, and attaches the other side to your router.
+Pass every window that should use this router, or create one handler per window
+when windows are created dynamically.
 
 ### 3. Expose the port receiver from preload
 
 ```typescript
 // preload/index.ts
-import { exposePortReceiver } from 'electron-messageport-trpc/preload';
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
 
-exposePortReceiver();
+exposeElectronTRPC();
 ```
 
 The preload script receives the transferred port from Electron and forwards it to
@@ -117,13 +117,10 @@ wraps so the renderer can use a normal tRPC client link.
 
 ```typescript
 // src/trpc.ts
-import { createTRPCClient } from '@trpc/client';
-import { getPort, portLink } from 'electron-messageport-trpc/renderer';
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
 import type { AppRouter } from '../electron/router';
 
-export const trpc = createTRPCClient<AppRouter>({
-  links: [portLink({ port: getPort() })],
-});
+export const trpc = createElectronTRPCClient<AppRouter>();
 ```
 
 ```typescript
@@ -146,24 +143,33 @@ Common imports:
 
 ```typescript
 import {
+  createElectronTRPCMain,
+  createElectronTRPCRendererUtilityBridge,
+  createElectronTRPCUtilityClient,
+  createElectronTRPCUtilityPool,
   createPortBroker,
   createPortHandler,
   createWindowMessagePortHandler,
   mainPortLink,
 } from 'electron-messageport-trpc/main';
-import { exposePortReceiver } from 'electron-messageport-trpc/preload';
-import { getPort, portLink } from 'electron-messageport-trpc/renderer';
-import { createParentPortHandler } from 'electron-messageport-trpc/utility';
+import { exposeElectronTRPC, exposePortReceiver } from 'electron-messageport-trpc/preload';
+import { createElectronTRPCClient, getPort, portLink } from 'electron-messageport-trpc/renderer';
+import { createElectronTRPCUtility, createParentPortHandler } from 'electron-messageport-trpc/utility';
 ```
 
 ## Which API Should I Use?
 
 | API | Use when |
 |---|---|
-| `createWindowMessagePortHandler` | A renderer window calls procedures on a main-process router. This is the default choice. |
+| `createElectronTRPCMain` | A renderer window calls procedures on a main-process router. This is the default choice. |
+| `createElectronTRPCClient` | The renderer creates a typed tRPC client for the default main channel or a typed channel registry. |
+| `createElectronTRPCUtilityClient` / `createElectronTRPCUtilityPool` | Main calls one or more utility-process routers. |
+| `createElectronTRPCRendererUtilityBridge` | Main brokers renderer-to-utility ports while staying out of the request path. |
+| `createWindowMessagePortHandler` | Low-level single-router window wiring. |
 | `portLink` | The renderer creates a tRPC client from the port received by `getPort()`. |
 | `mainPortLink` | The main process creates a tRPC client over a `MessagePortMain`, usually to call a utility process. |
-| `createParentPortHandler` | A utility process exposes a tRPC router on `process.parentPort`. |
+| `createElectronTRPCUtility` | A utility process exposes a typed registry channel on `process.parentPort`. |
+| `createParentPortHandler` | Low-level utility-process handler. |
 | `createPortBroker` | Main only brokers a port between renderer and utility, keeping main out of the request path. |
 | `createPortHandler` | Low-level helper for attaching a router to an existing protocol-dedicated port manually. |
 

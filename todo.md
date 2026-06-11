@@ -2,8 +2,9 @@
 
 ## electron-messageport-trpc follow-ups
 
-- [x] `0.5.0` typed registry API
-  - Added `defineElectronTRPC()` as the channel/router type contract.
+- [x] `0.5.0` high-level API
+  - Added main-only default channel API for the quickstart path.
+  - Added `defineElectronTRPC()` as the opt-in channel/router type contract for multi-topology apps.
   - Added renderer `createElectronTRPCClient()`.
   - Added preload `exposeElectronTRPC()`.
   - Added main `createElectronTRPCMain()`.
@@ -20,8 +21,10 @@
   - Added `destroy()` while preserving the `handlers` array.
 
 - [x] Quickstart ergonomics
+  - `createElectronTRPCMain({ router, windows })` covers renderer-to-main without a registry.
+  - `createElectronTRPCClient<AppRouter>()` covers renderer-to-main without a registry.
   - `portLink()` can now use the default renderer channel without an explicit `getPort()`.
-  - Docs and examples use the typed registry API instead of `portLink({ port: getPort() })`.
+  - Docs use the registry API only for multiple typed channels.
 
 - [ ] Remaining API design follow-ups
   - Consider dynamic window registration:
