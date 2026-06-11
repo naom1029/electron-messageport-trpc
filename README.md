@@ -42,30 +42,31 @@ pnpm add @trpc/server @trpc/client
 ### Main Process
 
 ```typescript
-import { createWindowMessagePortHandler } from 'electron-messageport-trpc/main';
+import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
 import { appRouter } from './router';
 
 const win = new BrowserWindow({ /* ... */ });
-createWindowMessagePortHandler({ router: appRouter, windows: [win] });
+createElectronTRPCMain({
+  router: appRouter,
+  windows: [win],
+});
 ```
 
 ### Preload
 
 ```typescript
-import { exposePortReceiver } from 'electron-messageport-trpc/preload';
-exposePortReceiver();
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
+
+exposeElectronTRPC();
 ```
 
 ### Renderer
 
 ```typescript
-import { createTRPCClient } from '@trpc/client';
-import { portLink } from 'electron-messageport-trpc/renderer';
-import { getPort } from 'electron-messageport-trpc/renderer';
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import type { AppRouter } from './router';
 
-const client = createTRPCClient<AppRouter>({
-  links: [portLink({ port: getPort() })],
-});
+const client = createElectronTRPCClient<AppRouter>();
 
 const result = await client.greeting.query({ name: 'World' });
 ```

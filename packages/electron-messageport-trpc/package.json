@@ -28,6 +28,11 @@
     "node": ">=20"
   },
   "exports": {
+    ".": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
     "./main": {
       "types": "./dist/main/index.d.ts",
       "import": "./dist/main.mjs",
@@ -59,8 +64,9 @@
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "typecheck": "tsc --noEmit",
     "build:types": "tsc -p tsconfig.build.json",
-    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc --noEmit && tsc -p tsconfig.build.json && vite build -c src/main/vite.config.ts && vite build -c src/renderer/vite.config.ts && vite build -c src/preload/vite.config.ts && vite build -c src/utility/vite.config.ts",
-    "build:watch": "npm run build:watch:main & npm run build:watch:renderer & npm run build:watch:preload & npm run build:watch:utility & tsc --noEmit --watch --preserveWatchOutput",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc --noEmit && tsc -p tsconfig.build.json && vite build -c src/core/vite.config.ts && vite build -c src/main/vite.config.ts && vite build -c src/renderer/vite.config.ts && vite build -c src/preload/vite.config.ts && vite build -c src/utility/vite.config.ts",
+    "build:watch": "npm run build:watch:core & npm run build:watch:main & npm run build:watch:renderer & npm run build:watch:preload & npm run build:watch:utility & tsc --noEmit --watch --preserveWatchOutput",
+    "build:watch:core": "vite build -c src/core/vite.config.ts --watch",
     "build:watch:main": "vite build -c src/main/vite.config.ts --watch",
     "build:watch:renderer": "vite build -c src/renderer/vite.config.ts --watch",
     "build:watch:preload": "vite build -c src/preload/vite.config.ts --watch",

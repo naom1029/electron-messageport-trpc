@@ -1,8 +1,7 @@
 import path from 'node:path';
 import { app, BrowserWindow, utilityProcess } from 'electron';
-import { createPortBroker } from 'electron-messageport-trpc/main';
-
-const broker = createPortBroker();
+import { createElectronTRPCRendererUtilityBridge } from 'electron-messageport-trpc/main';
+import { electronTRPC } from './trpc';
 
 async function waitForUtilityReady(
   child: Electron.UtilityProcess,
@@ -45,12 +44,14 @@ async function createWindow() {
     },
   });
 
-  win.webContents.on('did-finish-load', () => {
-    const { serverPort } = broker.createRendererPort(win.webContents);
-    child.postMessage({ type: 'connect' }, [serverPort]);
+  const bridge = createElectronTRPCRendererUtilityBridge({
+    window: win,
+    channel: electronTRPC.worker,
+    utility: child,
   });
 
   win.on('closed', () => {
+    bridge.destroy();
     child.kill();
   });
 

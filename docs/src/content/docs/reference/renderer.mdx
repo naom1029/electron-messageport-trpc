@@ -7,10 +7,68 @@ import { Aside } from '@astrojs/starlight/components';
 
 ```typescript
 import {
+  createElectronTRPCClient,
   portLink,
   getPort,
 } from 'electron-messageport-trpc/renderer';
 ```
+
+## `createElectronTRPCClient<TRouter>(opts?)`
+
+Creates a typed tRPC client for the default renderer-to-main channel.
+
+```typescript
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import type { AppRouter } from '../main/router';
+
+const trpc = createElectronTRPCClient<AppRouter>();
+
+await trpc.ping.query();
+```
+
+Use this form for a single renderer-to-main router.
+
+### Options
+
+```typescript
+interface CreateElectronTRPCSingleClientOptions {
+  transformer?: DataTransformerOptions;
+}
+```
+
+---
+
+## `createElectronTRPCClient(channels, opts?)`
+
+Creates typed tRPC clients for every channel defined by `defineElectronTRPC()`.
+
+```typescript
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import { electronTRPC } from '../main/trpc';
+
+const trpc = createElectronTRPCClient(electronTRPC);
+
+await trpc.main.ping.query();
+await trpc.worker.render.mutate(input);
+```
+
+Use this form when one renderer talks to multiple typed channels, such as main
+and utility-process routers.
+
+### Options
+
+```typescript
+interface CreateElectronTRPCClientOptions<TRegistry> {
+  transformer?: DataTransformerOptions;
+  channels?: Partial<
+    Record<keyof TRegistry, { transformer?: DataTransformerOptions }>
+  >;
+}
+```
+
+Use `channels` when different channel routers need different transformers.
+
+---
 
 ## `portLink(opts)`
 
@@ -20,14 +78,16 @@ Creates a tRPC link that communicates over a MessagePort. Use this as a link in 
 
 ```typescript
 interface PortLinkOptions {
-  port: MessagePort | Promise<MessagePort>;
+  port?: MessagePort | Promise<MessagePort>;
+  channel?: string;
   transformer?: DataTransformerOptions;
 }
 ```
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `port` | `MessagePort \| Promise<MessagePort>` | Yes | The renderer-side MessagePort, or a promise that resolves to one |
+| `port` | `MessagePort \| Promise<MessagePort>` | No | The renderer-side MessagePort, or a promise that resolves to one |
+| `channel` | `string` | No | Channel used when `port` is omitted |
 | `transformer` | `DataTransformerOptions` | No | Data transformer matching the remote router |
 
 ### Returns
@@ -43,13 +103,13 @@ import type { AppRouter } from '../main/router';
 
 const trpc = createTRPCClient<AppRouter>({
   links: [
-    portLink({ port: getPort() }),
+    portLink({ port: getPort({ channel: 'main' }) }),
   ],
 });
 ```
 
 <Aside type="tip">
-Since `portLink` accepts a `Promise<MessagePort>`, you can pass `getPort()` directly. The link will queue outgoing requests until the port resolves, then flush them.
+For the primary API, prefer `createElectronTRPCClient()`. `portLink()` remains available for custom MessagePort wiring.
 </Aside>
 
 ### How It Works
@@ -61,13 +121,17 @@ Since `portLink` accepts a `Promise<MessagePort>`, you can pass `getPort()` dire
 
 ---
 
-## `getPort()`
+## `getPort(opts?)`
 
 Returns a `Promise<MessagePort>` that resolves to the port exposed by the preload script.
 
 ### Parameters
 
-None.
+```typescript
+interface GetPortOptions {
+  channel?: string;
+}
+```
 
 ### Returns
 
@@ -87,5 +151,6 @@ Error: electronTRPCPort not found. Did you call exposePortReceiver() in your pre
 import { getPort } from 'electron-messageport-trpc/renderer';
 
 const port = await getPort();
+const workerPort = await getPort({ channel: 'worker' });
 // Use the port directly, or pass it to portLink
 ```

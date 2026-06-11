@@ -7,12 +7,112 @@ import { Aside } from '@astrojs/starlight/components';
 
 ```typescript
 import {
+  createElectronTRPCMain,
+  createElectronTRPCUtilityClient,
+  createElectronTRPCUtilityPool,
+  createElectronTRPCRendererUtilityBridge,
   mainPortLink,
   createWindowMessagePortHandler,
   createPortBroker,
   createPortHandler,
 } from 'electron-messageport-trpc/main';
 ```
+
+## `createElectronTRPCMain(opts)`
+
+Connects a main-process router, or one or more typed registry channels, to
+renderer windows.
+
+For a single renderer-to-main router, use the default channel:
+
+```typescript
+import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
+import { appRouter } from './router';
+
+createElectronTRPCMain({
+  windows: [win],
+  router: appRouter,
+});
+```
+
+For multiple typed channels, pass a registry created by `defineElectronTRPC()`:
+
+```typescript
+import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
+import { electronTRPC } from './trpc';
+import { appRouter } from './router';
+
+createElectronTRPCMain({
+  channels: electronTRPC,
+  windows: [win],
+  routers: {
+    main: appRouter,
+  },
+});
+```
+
+`routers` only accepts keys from the registry. Each router must match the
+router type registered for that channel.
+
+---
+
+## `createElectronTRPCUtilityClient(opts)`
+
+Creates a typed tRPC client from the main process to one utility process.
+
+```typescript
+const worker = createElectronTRPCUtilityClient({
+  channel: electronTRPC.worker,
+  utility: child,
+});
+
+await worker.render.mutate(input);
+```
+
+This wraps `MessageChannelMain`, `utility.postMessage()`, and `mainPortLink()`.
+
+---
+
+## `createElectronTRPCUtilityPool(opts)`
+
+Creates typed clients for multiple utility process instances that expose the
+same router type.
+
+```typescript
+const workers = createElectronTRPCUtilityPool({
+  channel: electronTRPC.worker,
+  utilities: {
+    a: workerA,
+    b: workerB,
+  },
+});
+
+await workers.get('a').render.mutate(input);
+```
+
+The registry channel carries the router type. The pool key chooses the runtime
+utility process instance.
+
+---
+
+## `createElectronTRPCRendererUtilityBridge(opts)`
+
+Brokers a renderer-to-utility MessagePort. The main process creates the port
+pair and transfers one side to the renderer and the other side to the utility
+process.
+
+```typescript
+createElectronTRPCRendererUtilityBridge({
+  window: win,
+  channel: electronTRPC.worker,
+  utility: child,
+});
+```
+
+The main process stays out of the tRPC request path after the port is handed
+off.
+
+---
 
 ## `createWindowMessagePortHandler(opts)`
 
@@ -66,7 +166,7 @@ app.whenReady().then(() => {
 ```
 
 <Aside type="tip">
-This is the recommended main-process API for renderer-to-main routers. It wraps the port broker and low-level request handler setup.
+For new code, prefer `createElectronTRPCMain()`. This lower-level helper remains available for single-router window wiring.
 </Aside>
 
 ---

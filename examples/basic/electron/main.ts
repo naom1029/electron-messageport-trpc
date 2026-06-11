@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { app, BrowserWindow } from 'electron';
-import { createWindowMessagePortHandler } from 'electron-messageport-trpc/main';
+import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
 import { appRouter } from './router';
 
 async function createWindow() {
@@ -14,7 +14,7 @@ async function createWindow() {
     },
   });
 
-  createWindowMessagePortHandler({
+  createElectronTRPCMain({
     router: appRouter,
     windows: [win],
   });
