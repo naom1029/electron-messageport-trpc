@@ -20,7 +20,22 @@ import {
 
 ## `createElectronTRPCMain(opts)`
 
-Connects one or more typed registry channels to renderer windows.
+Connects a main-process router, or one or more typed registry channels, to
+renderer windows.
+
+For a single renderer-to-main router, use the default channel:
+
+```typescript
+import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
+import { appRouter } from './router';
+
+createElectronTRPCMain({
+  windows: [win],
+  router: appRouter,
+});
+```
+
+For multiple typed channels, pass a registry created by `defineElectronTRPC()`:
 
 ```typescript
 import { createElectronTRPCMain } from 'electron-messageport-trpc/main';

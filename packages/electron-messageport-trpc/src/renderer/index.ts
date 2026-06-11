@@ -1,5 +1,6 @@
 export type {
   CreateElectronTRPCClientOptions,
+  CreateElectronTRPCSingleClientOptions,
   ElectronTRPCRendererClient,
 } from './createElectronTRPCClient';
 export { createElectronTRPCClient } from './createElectronTRPCClient';

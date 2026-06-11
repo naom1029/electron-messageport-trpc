@@ -64,6 +64,36 @@ function getTransferredPort(window: MockBrowserWindow, index: number) {
 }
 
 describe('electronTRPC main API', () => {
+  it('connects a single main router on the default channel without a registry', async () => {
+    // Arrange
+    const window = new MockBrowserWindow();
+
+    createElectronTRPCMain({
+      windows: [window],
+      router: appRouter,
+    });
+
+    // Act
+    window.webContents.emit('did-finish-load');
+
+    // Assert
+    expect(window.webContents.postMessage).toHaveBeenCalledTimes(1);
+    expect(window.webContents.postMessage.mock.calls[0][1]).toEqual({
+      channel: 'default',
+    });
+
+    const mainPort = getTransferredPort(window, 0);
+    if (!mainPort) {
+      throw new Error('Expected transferred port');
+    }
+
+    const mainClient = createTRPCClient<AppRouter>({
+      links: [mainPortLink({ port: mainPort })],
+    });
+
+    await expect(mainClient.ping.query()).resolves.toBe('main');
+  });
+
   it('connects each registered renderer channel with its matching router', async () => {
     // Arrange
     const window = new MockBrowserWindow();
@@ -103,9 +133,9 @@ describe('electronTRPC main API', () => {
     });
 
     await expect(mainClient.ping.query()).resolves.toBe('main');
-    await expect(
-      workerClient.render.mutate({ name: 'frame' }),
-    ).resolves.toBe('rendered:frame');
+    await expect(workerClient.render.mutate({ name: 'frame' })).resolves.toBe(
+      'rendered:frame',
+    );
   });
 
   it('creates a typed main-to-utility client over MessageChannelMain', async () => {
