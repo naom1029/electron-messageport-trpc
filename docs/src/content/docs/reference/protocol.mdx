@@ -44,12 +44,13 @@ transport.
 
 ## Binary Data
 
-`Uint8Array` and `ArrayBuffer` are supported by the MessagePort transport.
+`Uint8Array`, `ArrayBuffer`, typed arrays, and other Structured Clone values use
+the platform MessagePort transport directly.
 
-`Blob` is not currently supported as a MessagePort payload in this package.
-Electron renderer-to-main MessagePort transfer can deliver Blob-containing
-messages as `null` without throwing from `postMessage()`. Use `ArrayBuffer` or
-`Uint8Array` for binary payloads.
+`Blob` values are encoded by this package before `postMessage()` and restored on
+the receiving side. This avoids Electron renderer-to-main MessagePort behavior
+where Blob-containing messages can arrive as `null` without throwing from
+`postMessage()`.
 
 ## Compatibility Notes
 

@@ -1,5 +1,5 @@
 import { createTRPCClient, TRPCClientError } from '@trpc/client';
-import { initTRPC } from '@trpc/server';
+import { initTRPC, tracked } from '@trpc/server';
 import { describe, expect, it } from 'vitest';
 import { createPortHandler } from '../../main/createPortHandler';
 import { createBridgedPair } from '../../shared/__tests__/mockBridge';
@@ -49,6 +49,25 @@ function setupRouter() {
       }),
     failingQuery: t.procedure.query(() => {
       throw new Error('Boom');
+    }),
+    blobSize: t.procedure
+      .input((value: unknown) => value as Blob)
+      .mutation(async ({ input }) => ({
+        size: input.size,
+        text: await input.text(),
+        type: input.type,
+      })),
+    circular: t.procedure
+      .input((value: unknown) => value as { self?: unknown })
+      .mutation(({ input }) => input.self === input),
+    streamQuery: t.procedure.query(async function* () {
+      yield { index: 0 };
+      yield { index: 1 };
+      yield { index: 2 };
+    }),
+    trackedEvents: t.procedure.subscription(async function* () {
+      yield tracked('1', { label: 'first' });
+      yield tracked('2', { label: 'second' });
     }),
   });
 }
@@ -133,6 +152,146 @@ describe('portLink', () => {
 
       // Assert
       expect(result).toEqual({ id: 1, name: 'Alice' });
+    });
+
+    it('should encode Blob input before MessagePort structured clone', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const client = createTRPCClient<AppRouter>({
+        links: [portLink({ port: clientPort })],
+      });
+
+      // Act
+      const result = await client.blobSize.mutate(
+        new Blob(['hello'], { type: 'text/plain' }),
+      );
+
+      // Assert
+      expect(result).toEqual({ size: 5, text: 'hello', type: 'text/plain' });
+    });
+
+    it('should preserve circular structured-clone inputs without Blob decoding', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const client = createTRPCClient<AppRouter>({
+        links: [portLink({ port: clientPort })],
+      });
+
+      const input: { self?: unknown } = {};
+      input.self = input;
+
+      // Act
+      const result = await client.circular.mutate(input);
+
+      // Assert
+      expect(result).toBe(true);
+    });
+  });
+
+  describe('streaming query results', () => {
+    it('should stream async iterable query results until stopped', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const client = createTRPCClient<AppRouter>({
+        links: [portLink({ port: clientPort })],
+      });
+
+      // Act
+      const iterable = await client.streamQuery.query();
+      const values: unknown[] = [];
+      for await (const value of iterable) {
+        values.push(value);
+      }
+
+      // Assert
+      expect(values).toEqual([{ index: 0 }, { index: 1 }, { index: 2 }]);
+    });
+
+    it('should abort the server query when the streamed result is returned early', async () => {
+      // Arrange
+      const t = initTRPC.create();
+      let markAborted: () => void = () => {};
+      const aborted = new Promise<void>((resolve) => {
+        markAborted = resolve;
+      });
+      const router = t.router({
+        streamUntilAbort: t.procedure.query(async function* ({ signal }) {
+          yield { index: 0 };
+          await new Promise<void>((resolve) => {
+            signal?.addEventListener(
+              'abort',
+              () => {
+                markAborted();
+                resolve();
+              },
+              { once: true },
+            );
+          });
+        }),
+      });
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const client = createTRPCClient<typeof router>({
+        links: [portLink({ port: clientPort })],
+      });
+
+      // Act
+      const iterable = await client.streamUntilAbort.query();
+      const values: unknown[] = [];
+      for await (const value of iterable) {
+        values.push(value);
+        break;
+      }
+
+      // Assert
+      await aborted;
+      expect(values).toEqual([{ index: 0 }]);
+    });
+  });
+
+  describe('tracked subscription results', () => {
+    it('should strip the non-cloneable tracked symbol and preserve event ids', async () => {
+      // Arrange
+      const router = setupRouter();
+      const { serverPort, clientPort } = createBridgedPair();
+      createPortHandler({ port: serverPort, router });
+
+      const client = createTRPCClient<AppRouter>({
+        links: [portLink({ port: clientPort })],
+      });
+
+      const received: unknown[] = [];
+
+      // Act
+      await new Promise<void>((resolve, reject) => {
+        client.trackedEvents.subscribe(undefined, {
+          onData(value) {
+            received.push(value);
+          },
+          onComplete() {
+            resolve();
+          },
+          onError(error) {
+            reject(error);
+          },
+        });
+      });
+
+      // Assert
+      expect(received).toEqual([
+        { id: '1', data: { label: 'first' } },
+        { id: '2', data: { label: 'second' } },
+      ]);
     });
   });
 
