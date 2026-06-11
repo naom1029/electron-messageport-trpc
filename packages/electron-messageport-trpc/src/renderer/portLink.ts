@@ -7,6 +7,7 @@ import { isServerMessage } from '../shared/protocol';
 import { nextRequestId } from '../shared/requestId';
 import type { DataTransformerOptions } from '../shared/transformer';
 import { getTransformer } from '../shared/transformer';
+import { getPort } from './receivePort';
 
 interface RendererPortLike {
   addEventListener(
@@ -23,7 +24,8 @@ interface RendererPortLike {
 }
 
 export interface PortLinkOptions {
-  port: RendererPortLike | Promise<RendererPortLike>;
+  port?: RendererPortLike | Promise<RendererPortLike>;
+  channel?: string;
   transformer?: DataTransformerOptions;
 }
 
@@ -52,10 +54,12 @@ function createAbortError(): Error {
 }
 
 export function portLink<TRouter extends AnyRouter>(
-  opts: PortLinkOptions,
+  opts: PortLinkOptions = {},
 ): TRPCLink<TRouter> {
   return () => {
-    const portPromise = Promise.resolve(opts.port);
+    const portPromise = Promise.resolve(
+      opts.port ?? getPort({ channel: opts.channel }),
+    );
     const transformer = getTransformer(opts.transformer);
     const pending = new Map<number, PendingRequest>();
     let resolvedPort: RendererPortLike | null = null;

@@ -1,7 +1,4 @@
-import { createTRPCClient } from '@trpc/client';
-import { getPort, portLink } from 'electron-messageport-trpc/renderer';
-import type { UtilityRouter } from '../utility/router';
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import { electronTRPC } from '../electron/trpc';
 
-export const trpc = createTRPCClient<UtilityRouter>({
-  links: [portLink({ port: getPort() })],
-});
+export const trpc = createElectronTRPCClient(electronTRPC).worker;

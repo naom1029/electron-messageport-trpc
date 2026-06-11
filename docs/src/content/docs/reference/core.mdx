@@ -1,0 +1,35 @@
+---
+title: Core API
+description: API reference for electron-messageport-trpc
+---
+
+```typescript
+import { defineElectronTRPC } from 'electron-messageport-trpc';
+```
+
+## `defineElectronTRPC<TRegistry>()`
+
+Defines the typed channel contract shared by main, preload, renderer, and
+utility code.
+
+```typescript
+import { defineElectronTRPC } from 'electron-messageport-trpc';
+import type { AppRouter } from './main-router';
+import type { WorkerRouter } from './worker-router';
+
+export const electronTRPC = defineElectronTRPC<{
+  main: AppRouter;
+  worker: WorkerRouter;
+}>();
+```
+
+The registry key is the runtime channel name. The registry value is the tRPC
+router type behind that channel.
+
+```typescript
+await client.main.ping.query();
+await client.worker.render.mutate(input);
+```
+
+This keeps channel names and router types coupled. A utility channel cannot be
+accidentally used as the main-process router type.

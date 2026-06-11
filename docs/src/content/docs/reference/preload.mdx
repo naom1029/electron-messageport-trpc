@@ -6,8 +6,27 @@ description: API reference for electron-messageport-trpc/preload
 import { Aside } from '@astrojs/starlight/components';
 
 ```typescript
-import { exposePortReceiver } from 'electron-messageport-trpc/preload';
+import {
+  exposeElectronTRPC,
+  exposePortReceiver,
+} from 'electron-messageport-trpc/preload';
 ```
+
+## `exposeElectronTRPC(channels?)`
+
+Sets up the preload bridge for the typed channel registry.
+
+```typescript
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
+import { electronTRPC } from '../main/trpc';
+
+exposeElectronTRPC(electronTRPC);
+```
+
+This is the primary preload API for `0.5.x`. It can receive multiple channel
+ports and forward the requested channel into the renderer main world.
+
+---
 
 ## `exposePortReceiver()`
 
@@ -21,7 +40,11 @@ Sets up the preload script to receive a MessagePort from the main process and ex
 
 ### Parameters
 
-None.
+```typescript
+interface ExposePortReceiverOptions {
+  channels?: readonly string[];
+}
+```
 
 ### Returns
 
@@ -45,10 +68,11 @@ This function must be called in the preload script, not in the main process or r
 After calling `exposePortReceiver()`, the renderer has access to:
 
 ```typescript
-window.electronTRPCPort.requestPort(): void
+window.electronTRPCPort.requestPort(channel?: string): void
 ```
 
-You do not need to use this directly -- the `getPort()` function from `electron-messageport-trpc/renderer` wraps it for you.
+You do not need to use this directly. `createElectronTRPCClient()` and
+`getPort()` wrap it for you.
 
 ### Security
 
