@@ -517,9 +517,23 @@ connect messageをfilterできるようにします。
 
 ## 推奨する主APIの方向性
 
-長期的には、typed channel registry と runtime setup helper を組み合わせる
-APIが最もよいです。registryを契約として扱い、main、renderer、utility の
-各コードが同じ契約をimportすることで、channel名とrouter typeを結びつけます。
+renderer-to-main だけの最小構成では、registryを要求しないdefault channel APIを
+primaryにします。
+
+```ts
+createElectronTRPCMain({
+  windows: [win],
+  router: appRouter,
+});
+
+const client = createElectronTRPCClient<AppRouter>();
+await client.ping.query();
+```
+
+typed channel registry は opt-in です。renderer-to-main と renderer-to-utilityを
+同時に扱う場合や、複数utility routerを持つ場合にだけ使います。registryを契約
+として扱い、main、renderer、utility の各コードが同じ契約をimportすることで、
+channel名とrouter typeを結びつけます。
 
 ```ts
 // trpc/electron.ts
@@ -573,7 +587,7 @@ createElectronTRPCMain({
 Main, renderer-to-utility broker:
 
 ```ts
-broker.connectRendererToUtility({
+createElectronTRPCRendererUtilityBridge({
   window: win,
   channel: electronTRPC.utility,
   utility: child,
@@ -771,7 +785,8 @@ type ElectronTRPCRegistry = {
 
 ### `0.5.0` candidate
 
-- typed registry APIを推奨高レベルAPIとして追加する。
+- main-only default channel APIをprimary quickstartとして追加する。
+- typed registry APIをmulti-topology用のopt-in高レベルAPIとして追加する。
 - 既存の低レベルlinks/handlersは残す。
 - 現行のsingleton helpersは互換helperとして残す。新APIがquickstartをきれいに
   覆える場合のみlegacy扱いを検討する。
