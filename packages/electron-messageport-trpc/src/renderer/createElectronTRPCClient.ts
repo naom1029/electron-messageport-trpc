@@ -27,6 +27,8 @@ export function createElectronTRPCClient<
   channels: ElectronTRPCChannels<TRegistry>,
   opts: CreateElectronTRPCClientOptions<TRegistry> = {},
 ): ElectronTRPCRendererClient<TRegistry> {
+  const clients = new Map<string, TRPCClient<TRegistry[keyof TRegistry & string]>>();
+
   return new Proxy(
     {},
     {
@@ -40,9 +42,14 @@ export function createElectronTRPCClient<
           return undefined;
         }
 
+        const client = clients.get(property);
+        if (client) {
+          return client;
+        }
+
         const channelOptions =
           opts.channels?.[property as keyof TRegistry & string];
-        return createTRPCClient({
+        const nextClient = createTRPCClient({
           links: [
             portLink({
               channel: channel.name,
@@ -50,6 +57,8 @@ export function createElectronTRPCClient<
             }),
           ],
         });
+        clients.set(property, nextClient);
+        return nextClient;
       },
     },
   ) as ElectronTRPCRendererClient<TRegistry>;
