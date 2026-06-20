@@ -10,9 +10,11 @@ declare global {
 
 export interface GetPortOptions {
   channel?: string;
+  timeoutMs?: number;
 }
 
 const DEFAULT_CHANNEL = 'default';
+const DEFAULT_TIMEOUT_MS = 10000;
 const portPromises = new Map<string, Promise<MessagePort>>();
 
 function normalizeChannel(channel: string | undefined): string {
@@ -20,20 +22,34 @@ function normalizeChannel(channel: string | undefined): string {
 }
 
 export function getPort(opts: GetPortOptions = {}): Promise<MessagePort> {
-  const bridge = window.electronTRPCPort;
-  if (!bridge) {
-    throw new Error(
-      'electronTRPCPort not found. Did you call exposePortReceiver() in your preload script?',
-    );
-  }
-
   const channel = normalizeChannel(opts.channel);
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
   const portPromise = portPromises.get(channel);
   if (portPromise) {
     return portPromise;
   }
 
-  const nextPortPromise = new Promise<MessagePort>((resolve) => {
+  const nextPortPromise = new Promise<MessagePort>((resolve, reject) => {
+    const bridge = window.electronTRPCPort;
+    if (!bridge) {
+      reject(
+        new Error(
+          'electronTRPCPort not found. Did you call exposePortReceiver() in your preload script?',
+        ),
+      );
+      return;
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    function cleanup(): void {
+      window.removeEventListener('message', handleMessage);
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
+
     function handleMessage(event: MessageEvent): void {
       const data = event.data as {
         channel?: string;
@@ -52,12 +68,28 @@ export function getPort(opts: GetPortOptions = {}): Promise<MessagePort> {
         return;
       }
 
-      window.removeEventListener('message', handleMessage);
+      cleanup();
       resolve(port);
     }
 
+    timeoutId = setTimeout(() => {
+      cleanup();
+      reject(
+        new Error(
+          `No port received for channel "${channel}" within ${timeoutMs}ms; is createElectronTRPCMain wired and is "${channel}" in the preload allowlist?`,
+        ),
+      );
+    }, timeoutMs);
+
     window.addEventListener('message', handleMessage);
     bridge.requestPort(channel);
+  });
+
+  // On rejection, drop the cached entry so a later getPort() can retry.
+  nextPortPromise.catch(() => {
+    if (portPromises.get(channel) === nextPortPromise) {
+      portPromises.delete(channel);
+    }
   });
 
   portPromises.set(channel, nextPortPromise);

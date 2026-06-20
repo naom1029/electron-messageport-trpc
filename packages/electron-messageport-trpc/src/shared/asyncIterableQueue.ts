@@ -14,6 +14,7 @@ export function createAsyncIterableQueue<T>(
     reject(cause: unknown): void;
   }> = [];
   let completed = false;
+  let hasError = false;
   let error: unknown;
 
   function settle(): void {
@@ -25,7 +26,7 @@ export function createAsyncIterableQueue<T>(
       }
     }
 
-    if (error !== undefined) {
+    if (hasError) {
       while (waiters.length > 0) {
         waiters.shift()?.reject(error);
       }
@@ -51,7 +52,7 @@ export function createAsyncIterableQueue<T>(
               });
             }
 
-            if (error !== undefined) {
+            if (hasError) {
               return Promise.reject(error);
             }
 
@@ -73,13 +74,14 @@ export function createAsyncIterableQueue<T>(
       },
     },
     push(value) {
-      if (completed || error !== undefined) {
+      if (completed || hasError) {
         return;
       }
       values.push(value);
       settle();
     },
     error(cause) {
+      hasError = true;
       error = cause;
       settle();
     },

@@ -195,6 +195,48 @@ describe('createPortHandler', () => {
     });
   });
 
+  describe('error delivery on a closed port', () => {
+    it('should not produce an unhandled rejection when delivering an error fails', async () => {
+      // Arrange
+      const router = setupRouter();
+      const [clientPort, serverPort] = MockMessagePortMain.createPair();
+      clientPort.start();
+      createPortHandler({ port: serverPort, router });
+
+      // Capture only rejections originating from this port (a closed
+      // MockMessagePortMain rejects with "Port is closed") so unrelated
+      // rejections leaking from other tests in the same worker cannot affect
+      // this assertion.
+      const portClosedRejections: unknown[] = [];
+      const onUnhandled = (reason: unknown) => {
+        if (reason instanceof Error && /port is closed/i.test(reason.message)) {
+          portClosedRejections.push(reason);
+        }
+      };
+      process.on('unhandledRejection', onUnhandled);
+
+      // Act - trigger a failing query, then close the server port before the
+      // async error-delivery reaches postMessage so that postMessage throws.
+      clientPort.postMessage({
+        kind: 'request',
+        id: 99,
+        method: 'query',
+        path: 'failingQuery',
+        input: undefined,
+      } satisfies ClientMessage);
+      serverPort.close();
+
+      // Allow the request handler, encodeCloneSafe, and any rejection
+      // bookkeeping to flush.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Assert
+      process.off('unhandledRejection', onUnhandled);
+      expect(serverPort.closed).toBe(true);
+      expect(portClosedRejections).toEqual([]);
+    });
+  });
+
   describe('lifecycle', () => {
     it('should ignore malformed messages and continue handling requests', async () => {
       // Arrange
