@@ -22,7 +22,7 @@ This guide walks through a minimal setup where a **renderer** process calls proc
       greet: t.procedure
         .input(z.object({ name: z.string() }))
         .query(({ input }) => {
-          return `Hello, ${input.name}!`;
+          return { message: `Hello, ${input.name}!` };
         }),
     });
 
@@ -33,6 +33,7 @@ This guide walks through a minimal setup where a **renderer** process calls proc
 
     ```typescript
     // src/main/index.ts
+    import path from 'node:path';
     import { app, BrowserWindow } from 'electron';
     import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
     import { appRouter } from './router';
@@ -40,7 +41,9 @@ This guide walks through a minimal setup where a **renderer** process calls proc
     app.whenReady().then(() => {
       const win = new BrowserWindow({
         webPreferences: {
-          preload: '/path/to/preload.js',
+          preload: path.join(__dirname, 'preload.js'),
+          contextIsolation: true,
+          nodeIntegration: false,
         },
       });
 
@@ -71,8 +74,12 @@ This guide walks through a minimal setup where a **renderer** process calls proc
 
     const trpc = createElectronTRPCClient<AppRouter>();
 
-    const greeting = await trpc.greet.query({ name: 'World' });
-    console.log(greeting); // "Hello, World!"
+    // Wrap top-level awaits in an async IIFE (or rely on top-level await
+    // if your bundler targets an ESM context that supports it).
+    (async () => {
+      const { message } = await trpc.greet.query({ name: 'World' });
+      console.log(message); // "Hello, World!"
+    })();
     ```
 
 </Steps>

@@ -12,7 +12,6 @@ import {
   createElectronTRPCUtilityPool,
   createElectronTRPCRendererUtilityBridge,
   mainPortLink,
-  createWindowMessagePortHandler,
   createPortBroker,
   createPortHandler,
 } from 'electron-messageport-trpc/main';
@@ -21,7 +20,9 @@ import {
 ## `createElectronTRPCMain(opts)`
 
 Connects a main-process router, or one or more typed registry channels, to
-renderer windows.
+renderer windows. Each window's renderer is connected to its router, and the
+connection is re-established on reload; windows that have already loaded when
+registered are connected too. Returns an [`ElectronTRPCMainHandler`](#electrontrpcmainhandler).
 
 For a single renderer-to-main router, use the default channel:
 
@@ -51,35 +52,126 @@ createElectronTRPCMain({
 });
 ```
 
-`routers` only accepts keys from the registry. Each router must match the
-router type registered for that channel.
+`routers` is **partial**: this main process supplies routers only for the
+channels it hosts. Other declared channels may be served by a utility process
+(`createElectronTRPCUtility`) or brokered
+(`createElectronTRPCRendererUtilityBridge`). Each supplied router must match the
+router type registered for that channel, and every key must be a declared
+channel.
+
+### Parameters (single-router form)
+
+```typescript
+interface CreateElectronTRPCMainSingleOptions<TRouter, TWindow> {
+  windows: readonly TWindow[];
+  router: TRouter;
+  createContext?: (opts: { window: TWindow }) => MaybePromise<unknown>;
+  transformer?: DataTransformerOptions;
+}
+```
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `windows` | `readonly BrowserWindow[]` | Yes | Windows to wire to the default channel |
+| `router` | `AnyRouter` | Yes | The main-process tRPC router |
+| `createContext` | `(opts: { window }) => MaybePromise<unknown>` | No | Per-request context factory; receives the matching window |
+| `transformer` | `DataTransformerOptions` | No | Overrides the router's configured data transformer |
+
+### Parameters (registry form)
+
+```typescript
+interface CreateElectronTRPCMainOptions<TRegistry, TWindow> {
+  channels: ElectronTRPCChannels<TRegistry>;
+  windows: readonly TWindow[];
+  // Partial: supply routers only for the channels this main process hosts.
+  routers: Partial<{ [K in keyof TRegistry & string]: TRegistry[K] }>;
+  createContext?: (opts: {
+    window: TWindow;
+    channel: keyof TRegistry & string;
+  }) => MaybePromise<unknown>;
+  transformer?: DataTransformerOptions;
+  channelOptions?: Partial<
+    Record<keyof TRegistry & string, { transformer?: DataTransformerOptions }>
+  >;
+}
+```
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `channels` | `ElectronTRPCChannels<TRegistry>` | Yes | The `defineElectronTRPC()` registry |
+| `windows` | `readonly BrowserWindow[]` | Yes | Windows to wire to the channels this process serves |
+| `routers` | `Partial<{ [K in keyof TRegistry]: ... }>` | Yes | Routers for the channels **this main process serves**. A subset is allowed — other declared channels can be served by a utility process (`createElectronTRPCUtility`) or brokered (`createElectronTRPCRendererUtilityBridge`). Keys must be declared channels. |
+| `createContext` | `(opts: { window, channel }) => MaybePromise<unknown>` | No | Per-request context factory; receives the window **and** the channel name |
+| `transformer` | `DataTransformerOptions` | No | Default transformer for all channels |
+| `channelOptions` | `Partial<Record<channel, { transformer? }>>` | No | Per-channel overrides; a channel's `transformer` takes precedence over the top-level `transformer` |
+
+### `ElectronTRPCMainHandler`
+
+The return value of `createElectronTRPCMain()`.
+
+| Method | Description |
+|---|---|
+| `addWindow(window)` | Wires an additional window after creation (no-op if already wired or destroyed) |
+| `removeWindow(window)` | Tears down one window: removes its `did-finish-load`/`closed` listeners and destroys its handlers |
+| `destroy()` | Tears down every wired window |
+
+```typescript
+const handler = createElectronTRPCMain({ windows: [win], router: appRouter });
+
+const second = new BrowserWindow({ /* ... */ });
+handler.addWindow(second);
+
+// later
+handler.removeWindow(second);
+handler.destroy();
+```
 
 ---
 
 ## `createElectronTRPCUtilityClient(opts)`
 
 Creates a typed tRPC client from the main process to one utility process.
+Returns `{ client, destroy }` (not a bare client).
 
 ```typescript
-const worker = createElectronTRPCUtilityClient({
+const { client, destroy } = createElectronTRPCUtilityClient({
   channel: electronTRPC.worker,
   utility: child,
 });
 
-await worker.render.mutate(input);
+await client.render.mutate(input);
+
+// when the utility is no longer needed
+destroy();
 ```
 
-This wraps `MessageChannelMain`, `utility.postMessage()`, and `mainPortLink()`.
+It creates and wires the main-side port for you. (For manual port wiring, see
+[`mainPortLink()`](#mainportlinkopts).)
+
+### Ready handshake
+
+The client waits for the utility process to be ready before it connects — the
+library owns this handshake automatically (see
+[`createElectronTRPCUtility()`](/reference/utility/)), so there is no manual
+step. It also tears itself down when the utility process exits.
+
+### Returns
+
+| Field | Type | Description |
+|---|---|---|
+| `client` | `TRPCClient<RouterForChannel<TChannel>>` | The typed client for the channel's router |
+| `destroy()` | `() => void` | Closes the kept main-process port and removes the `message`/`exit` listeners |
 
 ---
 
 ## `createElectronTRPCUtilityPool(opts)`
 
 Creates typed clients for multiple utility process instances that expose the
-same router type.
+same router type. Each instance uses the same ready-wait handshake and
+`{ client, destroy }` machinery as `createElectronTRPCUtilityClient()`.
 
 ```typescript
-const workers = createElectronTRPCUtilityPool({
+const pool = createElectronTRPCUtilityPool({
   channel: electronTRPC.worker,
   utilities: {
     a: workerA,
@@ -87,11 +179,21 @@ const workers = createElectronTRPCUtilityPool({
   },
 });
 
-await workers.get('a').render.mutate(input);
+await pool.get('a').render.mutate(input);
+
+// destroy every instance
+pool.destroy();
 ```
 
 The registry channel carries the router type. The pool key chooses the runtime
 utility process instance.
+
+### Methods
+
+| Method | Description |
+|---|---|
+| `get(instance)` | Returns the typed `client` for that instance (throws on an unknown instance key) |
+| `destroy()` | Destroys every instance's client (closes ports, removes listeners) |
 
 ---
 
@@ -109,84 +211,28 @@ createElectronTRPCRendererUtilityBridge({
 });
 ```
 
-The main process stays out of the tRPC request path after the port is handed
-off.
-
----
-
-## `createWindowMessagePortHandler(opts)`
-
-Creates and maintains MessagePort-backed tRPC handlers for one or more Electron windows.
-
-### Parameters
-
-```typescript
-interface CreateWindowMessagePortHandlerOptions<TRouter extends AnyRouter> {
-  router: TRouter;
-  windows: readonly BrowserWindow[];
-  createContext?: (opts: { window: BrowserWindow }) => Promise<unknown>;
-  transformer?: DataTransformerOptions;
-}
-```
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `router` | `AnyRouter` | Yes | Your tRPC router instance |
-| `windows` | `readonly BrowserWindow[]` | Yes | Windows that should receive a renderer-side port |
-| `createContext` | `(opts: { window: BrowserWindow }) => Promise<unknown>` | No | Factory invoked for each request with the matching window |
-| `transformer` | `DataTransformerOptions` | No | Overrides the router's configured data transformer |
-
-### Returns
-
-A `WindowMessagePortHandler` object.
-
-### `WindowMessagePortHandler`
-
-#### `handler.destroy()`
-
-Stops all managed window handlers and removes their Electron event listeners.
-
-### Example
-
-```typescript
-import { createWindowMessagePortHandler } from 'electron-messageport-trpc/main';
-import { appRouter } from './router';
-
-app.whenReady().then(() => {
-  const win = new BrowserWindow({ /* ... */ });
-
-  createWindowMessagePortHandler({
-    router: appRouter,
-    windows: [win],
-    createContext: async ({ window }) => ({
-      windowId: window.id,
-    }),
-  });
-});
-```
-
-<Aside type="tip">
-For new code, prefer `createElectronTRPCMain()`. This lower-level helper remains available for single-router window wiring.
-</Aside>
+Like `createElectronTRPCMain()`, it connects each window (including already-loaded
+ones) and re-connects on reload. The main process stays out of the tRPC request
+path after the port is handed off.
 
 ---
 
 ## `mainPortLink(opts)`
 
-Creates a tRPC client link for `MessagePortMain`-compatible ports in the main process. Use this when the main process is the tRPC client, such as calling a utility process over `MessageChannelMain`.
+Creates a tRPC client link for `MainPortLike`-compatible ports in the main process. Use this when the main process is the tRPC client, such as calling a utility process over `MessageChannelMain`.
 
 ### Parameters
 
 ```typescript
 interface MainPortLinkOptions {
-  port: MessagePortMain | Promise<MessagePortMain>;
+  port: MainPortLike | Promise<MainPortLike>;
   transformer?: DataTransformerOptions;
 }
 ```
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `port` | `MessagePortMain \| Promise<MessagePortMain>` | Yes | The client-side main-process port |
+| `port` | `MainPortLike \| Promise<MainPortLike>` | Yes | The client-side main-process port. Electron's `MessagePortMain` satisfies `MainPortLike` |
 | `transformer` | `DataTransformerOptions` | No | Data transformer matching the remote router |
 
 ### Example
@@ -206,6 +252,12 @@ const client = createTRPCClient({
 });
 ```
 
+<Aside type="tip">
+For typed utility wiring, prefer `createElectronTRPCUtilityClient()`, which owns
+the ready handshake and lifecycle for you. `mainPortLink()` remains available for
+custom port wiring.
+</Aside>
+
 ---
 
 ## `createPortBroker()`
@@ -218,25 +270,26 @@ A `PortBroker` object.
 
 ### `PortBroker`
 
-#### `broker.createRendererPort(webContents)`
+#### `broker.createRendererPort(webContents, opts?)`
 
 Creates a `MessageChannelMain` pair, sends one port to the specified renderer, and returns the other.
 
 **Parameters:**
 
-| Parameter | Type | Description |
-|---|---|---|
-| `webContents` | `WebContents` | The target renderer's `webContents` object (e.g., `win.webContents`) |
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `webContents` | `WebContents` | Yes | The target renderer's `webContents` object (e.g., `win.webContents`) |
+| `opts` | `CreateRendererPortOptions` | No | Port options. `{ channel?: string }` — names the channel sent to the renderer, defaulting to `'default'`. Set this to target a specific typed channel when servicing multiple channels |
 
 **Returns:**
 
 ```typescript
 {
-  serverPort: MessagePortMain;
+  serverPort: MessagePortLike;
 }
 ```
 
-The `serverPort` is the main-process side of the channel. Pass it to `createPortHandler()` to start handling tRPC requests.
+The `serverPort` is the main-process side of the channel (a `MessagePortMain`, which satisfies `MessagePortLike`). Pass it to `createPortHandler()` to start handling tRPC requests.
 
 ### Example
 
@@ -250,7 +303,7 @@ const { serverPort } = broker.createRendererPort(win.webContents);
 ```
 
 <Aside type="note">
-Internally, `createRendererPort` calls `webContents.postMessage()` with the port as a transferable. The preload script must call `exposePortReceiver()` to receive it.
+`createRendererPort` sends the port to the renderer; the preload script must call `exposePortReceiver()` to receive it.
 </Aside>
 
 ---
@@ -269,16 +322,16 @@ This is a low-level API. The supplied port should be dedicated to the electron-m
 interface CreatePortHandlerOptions<TRouter extends AnyRouter> {
   port: MessagePortLike;
   router: TRouter;
-  createContext?: () => Promise<unknown>;
+  createContext?: () => MaybePromise<unknown>;
   transformer?: DataTransformerOptions;
 }
 ```
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `port` | `MessagePortMain` | Yes | The server-side MessagePort (from `createRendererPort`) |
+| `port` | `MessagePortLike` | Yes | The server-side MessagePort (from `createRendererPort`) |
 | `router` | `AnyRouter` | Yes | Your tRPC router instance |
-| `createContext` | `() => Promise<unknown>` | No | Factory function called for every request to create the context object |
+| `createContext` | `() => MaybePromise<unknown>` | No | Factory function called for every request to create the context object |
 | `transformer` | `DataTransformerOptions` | No | Overrides the router's configured data transformer |
 
 ### Returns
@@ -329,8 +382,6 @@ app.whenReady().then(() => {
 When a `subscription` request arrives:
 
 1. The procedure is called and must return an async iterable.
-2. The handler sends `{ kind: 'result', type: 'started' }`.
-3. Each yielded value is sent as a `{ kind: 'result', type: 'data' }` message.
-4. If the procedure yields `tracked(id, data)`, the handler sends the tracked event ID for tRPC v11 resumption.
-5. When the client sends `{ kind: 'subscription.stop' }`, the `AbortController` is aborted.
-6. When the port closes, all active subscriptions are aborted automatically.
+2. Each value it yields is delivered to the client.
+3. If the procedure yields `tracked(id, data)`, the event ID is carried through to enable tRPC v11 subscription resumption.
+4. When the client unsubscribes — or the port closes — the subscription is aborted automatically.

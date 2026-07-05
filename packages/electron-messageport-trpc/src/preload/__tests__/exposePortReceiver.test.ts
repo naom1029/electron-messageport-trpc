@@ -120,4 +120,174 @@ describe('exposePortReceiver', () => {
     utilityPort.close();
     utilityPeer.close();
   });
+
+  it('services every channel when no allowlist is configured', async () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal('window', { postMessage });
+    const { exposePortReceiver } = await import('../exposePortReceiver');
+    const { port1, port2 } = new MessageChannel();
+
+    exposePortReceiver();
+    const handler = electronMocks.ipcRenderer.on.mock.calls[0][1] as (
+      event: { ports: MessagePort[] },
+      message?: { channel?: string },
+    ) => void;
+    const bridge = electronMocks.contextBridge.exposeInMainWorld.mock
+      .calls[0][1] as { requestPort(channel?: string): void } | undefined;
+
+    handler({ ports: [port1] }, { channel: 'arbitrary' });
+    bridge?.requestPort('arbitrary');
+
+    expect(postMessage).toHaveBeenCalledOnce();
+    expect(postMessage.mock.calls[0][0]).toEqual({
+      channel: PORT_INIT_CHANNEL,
+      trpcChannel: 'arbitrary',
+    });
+    expect(postMessage.mock.calls[0][2][0]).toBe(port1);
+    port1.close();
+    port2.close();
+  });
+
+  it('treats an empty allowlist the same as omitting it (services every channel)', async () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal('window', { postMessage });
+    const { exposePortReceiver } = await import('../exposePortReceiver');
+    const { port1, port2 } = new MessageChannel();
+
+    exposePortReceiver({ channels: [] });
+    const handler = electronMocks.ipcRenderer.on.mock.calls[0][1] as (
+      event: { ports: MessagePort[] },
+      message?: { channel?: string },
+    ) => void;
+    const bridge = electronMocks.contextBridge.exposeInMainWorld.mock
+      .calls[0][1] as { requestPort(channel?: string): void } | undefined;
+
+    handler({ ports: [port1] }, { channel: 'arbitrary' });
+    bridge?.requestPort('arbitrary');
+
+    expect(postMessage).toHaveBeenCalledOnce();
+    expect(postMessage.mock.calls[0][0]).toEqual({
+      channel: PORT_INIT_CHANNEL,
+      trpcChannel: 'arbitrary',
+    });
+    expect(postMessage.mock.calls[0][2][0]).toBe(port1);
+    port1.close();
+    port2.close();
+  });
+
+  it('restricts to the declared channels when handed a defineElectronTRPC registry', async () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal('window', { postMessage });
+    const { exposeElectronTRPC } = await import('../exposePortReceiver');
+    const { channel, defineElectronTRPC } = await import('../../core/index');
+    const { port1, port2 } = new MessageChannel();
+    const registry = defineElectronTRPC({
+      main: channel(),
+      utility: channel(),
+    });
+
+    // A registry now carries its declared channel names at runtime, so passing
+    // one restricts the preload to exactly those names.
+    exposeElectronTRPC(registry);
+    const handler = electronMocks.ipcRenderer.on.mock.calls[0][1] as (
+      event: { ports: MessagePort[] },
+      message?: { channel?: string },
+    ) => void;
+    const bridge = electronMocks.contextBridge.exposeInMainWorld.mock
+      .calls[0][1] as { requestPort(channel?: string): void } | undefined;
+
+    handler({ ports: [port1] }, { channel: 'utility' });
+    bridge?.requestPort('utility');
+
+    expect(postMessage).toHaveBeenCalledOnce();
+    expect(postMessage.mock.calls[0][0]).toEqual({
+      channel: PORT_INIT_CHANNEL,
+      trpcChannel: 'utility',
+    });
+    expect(postMessage.mock.calls[0][2][0]).toBe(port1);
+    port1.close();
+    port2.close();
+  });
+
+  it('ignores undeclared channels when handed a defineElectronTRPC registry', async () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal('window', { postMessage });
+    const { exposeElectronTRPC } = await import('../exposePortReceiver');
+    const { channel, defineElectronTRPC } = await import('../../core/index');
+    const { port1, port2 } = new MessageChannel();
+    const registry = defineElectronTRPC({
+      main: channel(),
+    });
+
+    exposeElectronTRPC(registry);
+    const handler = electronMocks.ipcRenderer.on.mock.calls[0][1] as (
+      event: { ports: MessagePort[] },
+      message?: { channel?: string },
+    ) => void;
+    const bridge = electronMocks.contextBridge.exposeInMainWorld.mock
+      .calls[0][1] as { requestPort(channel?: string): void } | undefined;
+
+    handler({ ports: [port1] }, { channel: 'utility' });
+    bridge?.requestPort('utility');
+
+    expect(postMessage).not.toHaveBeenCalled();
+    port1.close();
+    port2.close();
+  });
+
+  it('ignores out-of-list channels but services allowlisted ones', async () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal('window', { postMessage });
+    const { exposePortReceiver } = await import('../exposePortReceiver');
+    const { port1: allowedPort, port2: allowedPeer } = new MessageChannel();
+    const { port1: blockedPort, port2: blockedPeer } = new MessageChannel();
+
+    exposePortReceiver({ channels: ['allowed'] });
+    const handler = electronMocks.ipcRenderer.on.mock.calls[0][1] as (
+      event: { ports: MessagePort[] },
+      message?: { channel?: string },
+    ) => void;
+    const bridge = electronMocks.contextBridge.exposeInMainWorld.mock
+      .calls[0][1] as { requestPort(channel?: string): void } | undefined;
+
+    handler({ ports: [blockedPort] }, { channel: 'blocked' });
+    handler({ ports: [allowedPort] }, { channel: 'allowed' });
+    bridge?.requestPort('blocked');
+    bridge?.requestPort('allowed');
+
+    expect(postMessage).toHaveBeenCalledOnce();
+    expect(postMessage.mock.calls[0][0]).toEqual({
+      channel: PORT_INIT_CHANNEL,
+      trpcChannel: 'allowed',
+    });
+    expect(postMessage.mock.calls[0][2][0]).toBe(allowedPort);
+    allowedPort.close();
+    allowedPeer.close();
+    blockedPort.close();
+    blockedPeer.close();
+  });
+
+  it('drops a request for an out-of-list channel even when its port later arrives', async () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal('window', { postMessage });
+    const { exposePortReceiver } = await import('../exposePortReceiver');
+    const { port1, port2 } = new MessageChannel();
+
+    exposePortReceiver({ channels: ['allowed'] });
+    const handler = electronMocks.ipcRenderer.on.mock.calls[0][1] as (
+      event: { ports: MessagePort[] },
+      message?: { channel?: string },
+    ) => void;
+    const bridge = electronMocks.contextBridge.exposeInMainWorld.mock
+      .calls[0][1] as { requestPort(channel?: string): void } | undefined;
+
+    // Request first (guarded by requestPort), then deliver the port: the
+    // request must have been dropped, so the arriving port is never forwarded.
+    bridge?.requestPort('blocked');
+    handler({ ports: [port1] }, { channel: 'blocked' });
+
+    expect(postMessage).not.toHaveBeenCalled();
+    port1.close();
+    port2.close();
+  });
 });

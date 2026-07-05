@@ -7,6 +7,53 @@ This library is most useful when you want tRPC's router and client model across
 Electron process boundaries, especially when more than one renderer or utility
 process is involved.
 
+## Versus `electron-trpc`
+
+If all you need is a typed renderer-to-main bridge, [`electron-trpc`](https://github.com/jsonnull/electron-trpc)
+already does that well over Electron IPC. The simple `electron-messageport-trpc`
+API is intentionally shaped the same way, so the renderer-to-main case stays a
+three-file setup with no extra concepts:
+
+```typescript
+// main
+import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
+import { appRouter } from './router';
+
+createElectronTRPCMain({ router: appRouter, windows: [win] });
+```
+
+```typescript
+// preload
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
+
+exposeElectronTRPC();
+```
+
+```typescript
+// renderer
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import type { AppRouter } from '../electron/router';
+
+const trpc = createElectronTRPCClient<AppRouter>();
+
+const { message } = await trpc.greet.query({ name: 'World' });
+trpc.timeTick.subscribe(undefined, { onData: (data) => console.log(data.time) });
+```
+
+The difference is the transport. `electron-trpc` routes every call through
+`ipcMain`/`ipcRenderer`. This library hands each consumer a transferred
+`MessagePort` and talks over it directly. For a single renderer the two feel
+nearly identical, so the trade-off only matters once your topology grows:
+
+- A transferred port is a direct channel, so a renderer can talk to a utility
+  process **without main sitting in the request path**.
+- The same transport spans renderer-to-main, main-to-utility, and
+  renderer-to-utility, so multi-renderer and utility-process layouts use one
+  model instead of bespoke IPC plumbing per hop.
+
+If you never leave the renderer-to-main path, either library is a reasonable
+choice. Reach for this one when MessagePort topologies are the point.
+
 ## What You Avoid Writing
 
 With hand-written Electron IPC, each procedure usually needs a channel name,
@@ -44,7 +91,56 @@ const result = await trpc.greet.query({ name: 'World' });
 | Shared procedure types | Router inference flows into renderer and main-side clients |
 | Runtime validation | Use the same tRPC validators and middleware you already use |
 | MessagePort transport | Use a transferred MessagePort as the tRPC transport instead of building custom IPC wrappers |
-| Utility processes | `mainPortLink()`, `createParentPortHandler()`, and `createPortBroker()` cover main-to-utility and renderer-to-utility flows |
+| Utility processes | `createElectronTRPCUtility()` in the worker, paired with `createElectronTRPCUtilityClient()` (main-to-utility) or `createElectronTRPCRendererUtilityBridge()` (renderer-to-utility) on the main side, cover the typed channel wiring |
+
+For utility-process topologies you define a typed channel registry once
+(contract-first, with `channel<Router>()` tokens) and let the helpers wire each
+hop. The worker just registers its router — the library emits the `ready` signal
+automatically, so no manual handshake is written anywhere:
+
+```typescript
+// electron/trpc.ts — single source of truth
+import { channel, defineElectronTRPC } from 'electron-messageport-trpc';
+import type { UtilityRouter } from '../utility/router';
+
+export const electronTRPC = defineElectronTRPC({
+  worker: channel<UtilityRouter>(),
+});
+```
+
+```typescript
+// utility worker
+import { createElectronTRPCUtility } from 'electron-messageport-trpc/utility';
+import { electronTRPC } from '../electron/trpc';
+import { utilityRouter } from './router';
+
+createElectronTRPCUtility({
+  channel: electronTRPC.worker,
+  router: utilityRouter,
+  parentPort: process.parentPort,
+});
+```
+
+Main forks the worker and builds either a main-side client or a direct
+renderer-to-utility bridge — the helper waits for the worker's `ready` signal
+internally. The client helper returns `{ client, destroy }`:
+
+```typescript
+// main
+import { createElectronTRPCUtilityClient } from 'electron-messageport-trpc/main';
+import { electronTRPC } from './trpc';
+
+const child = utilityProcess.fork(path.join(__dirname, 'worker.js'));
+
+const { client, destroy } = createElectronTRPCUtilityClient({
+  channel: electronTRPC.worker,
+  utility: child,
+});
+```
+
+See the [main-utility](https://github.com/naom1029/electron-messageport-trpc/tree/main/examples/main-utility)
+and [renderer-utility](https://github.com/naom1029/electron-messageport-trpc/tree/main/examples/renderer-utility)
+examples for the full `defineElectronTRPC()` channel registry.
 
 ## When Plain IPC Is Enough
 
@@ -54,3 +150,11 @@ topologies or subscription streams.
 
 Choose `electron-messageport-trpc` when IPC has become part of your app's typed
 API surface rather than a handful of one-off calls.
+
+---
+
+The `createElectronTRPC*` helpers cover the common topologies. If you need to own
+port creation or transfer yourself, the lower-level escape hatches —
+`mainPortLink()` and `createPortBroker()` (from `electron-messageport-trpc/main`)
+and `createParentPortHandler()` (from `electron-messageport-trpc/utility`) — let
+you build a transport on a raw `MessagePort` directly.

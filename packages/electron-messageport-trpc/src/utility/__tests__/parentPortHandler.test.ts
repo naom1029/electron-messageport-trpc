@@ -294,6 +294,26 @@ describe('parentPortHandler', () => {
     expect(result).toBe('FROM-TRANSFORMER');
   });
 
+  it('should emit a ready signal exactly once after the message listener is attached', () => {
+    // Arrange
+    const router = setupRouter();
+    const mockParentPort = new MockParentPort();
+    const listenerSpy = vi.spyOn(mockParentPort, 'on');
+
+    // Act
+    createParentPortHandler({
+      router,
+      parentPort: mockParentPort as ParentPortLike,
+    });
+
+    // Assert
+    expect(mockParentPort.postMessage).toHaveBeenCalledTimes(1);
+    expect(mockParentPort.postMessage).toHaveBeenCalledWith({ type: 'ready' });
+    const messageListenerOrder = listenerSpy.mock.invocationCallOrder[0];
+    const readyOrder = mockParentPort.postMessage.mock.invocationCallOrder[0];
+    expect(readyOrder).toBeGreaterThan(messageListenerOrder);
+  });
+
   it('should ignore ports for other channels', async () => {
     // Arrange
     const router = setupRouter();
@@ -314,6 +334,28 @@ describe('parentPortHandler', () => {
 
     // Assert
     expect(handler.handlers).toHaveLength(0);
+  });
+
+  it('should remove a handler when its port closes', () => {
+    // Arrange
+    const router = setupRouter();
+    const mockParentPort = new MockParentPort();
+    const { serverPort } = createUtilityBridge();
+
+    const handler = createParentPortHandler({
+      router,
+      parentPort: mockParentPort as ParentPortLike,
+    });
+
+    mockParentPort.emit('message', { data: null, ports: [serverPort] });
+    expect(handler.handlers).toHaveLength(1);
+
+    // Act
+    serverPort.emit('close');
+
+    // Assert
+    expect(handler.handlers).toHaveLength(0);
+    expect(serverPort.closed).toBe(true);
   });
 
   it('should destroy child port handlers', () => {

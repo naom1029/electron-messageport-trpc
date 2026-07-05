@@ -98,7 +98,11 @@ export function createPortHandler<TRouter extends AnyRouter>(
       ctx: undefined,
     });
 
-    void send({
+    // Fire-and-forget: the port may already be closed, in which case
+    // `send` rejects (postMessage throws). Swallow that rejection here so it
+    // does not surface as an unhandled promise rejection. Awaited `send`
+    // callers keep their own error-propagation semantics.
+    send({
       kind: 'error',
       id,
       error: transformer.output.serialize({
@@ -106,7 +110,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
         message: shape.message,
         data: shape.data,
       }),
-    });
+    }).catch(() => {});
   }
 
   async function iterateSubscription(

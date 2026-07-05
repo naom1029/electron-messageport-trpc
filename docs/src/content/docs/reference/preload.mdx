@@ -12,45 +12,65 @@ import {
 } from 'electron-messageport-trpc/preload';
 ```
 
-## `exposeElectronTRPC(channels?)`
+## `exposeElectronTRPC(input?)`
 
-Sets up the preload bridge for the typed channel registry.
+Sets up the preload bridge for the typed channel registry. This is a thin alias
+of [`exposePortReceiver()`](#exposeportreceiverinput) and accepts the identical
+`input?` parameter; the two are interchangeable.
 
 ```typescript
 import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
-import { electronTRPC } from '../main/trpc';
+import { electronTRPC } from '../electron/trpc';
 
 exposeElectronTRPC(electronTRPC);
 ```
 
 This is the primary preload API for `0.5.x`. It can receive multiple channel
-ports and forward the requested channel into the renderer main world.
+ports and forward the requested channel into the renderer main world. When you
+pass a `defineElectronTRPC()` registry, the preload's allowlist is **restricted
+to that registry's declared channel names** (see
+[Channels allowlist](#channels-allowlist)).
 
 ---
 
-## `exposePortReceiver()`
+## `exposePortReceiver(input?)`
 
-Sets up the preload script to receive a MessagePort from the main process and expose it to the renderer.
+Sets up the preload script to receive a MessagePort from the main process and expose it to the renderer. `exposeElectronTRPC()` is a thin alias of this function and takes the same parameter.
 
 ### What It Does
 
-1. Listens on the internal IPC channel for a port sent by `createRendererPort()`.
-2. Uses `contextBridge.exposeInMainWorld()` to expose a `window.electronTRPCPort` object with a `requestPort()` method.
-3. When the renderer requests a port, forwards the transferred MessagePort into the renderer's main world via `window.postMessage()`.
+Receives ports transferred from the main process and exposes them to the
+renderer client. You do not call this from your own code — the renderer client
+(`createElectronTRPCClient()` / `getPort()`) drives it for you.
 
 ### Parameters
+
+The single optional `input` parameter is an `ExposePortReceiverInput`, which is
+**either** an `{ channels }` options object **or** a `defineElectronTRPC()`
+registry. A registry carries its declared channel names at runtime, so passing
+one restricts the preload to exactly those channels:
 
 ```typescript
 interface ExposePortReceiverOptions {
   channels?: readonly string[];
 }
+
+// input?: ExposePortReceiverInput
+type ExposePortReceiverInput =
+  | ExposePortReceiverOptions
+  | ElectronTRPCChannels<ElectronTRPCRegistry>; // a defineElectronTRPC() return
 ```
+
+When omitted, `input` defaults to `{}`.
 
 ### Returns
 
 `void`
 
 ### Example
+
+Both forms are valid. Pass nothing (or an empty object) to service every
+channel:
 
 ```typescript
 // preload.ts
@@ -59,21 +79,47 @@ import { exposePortReceiver } from 'electron-messageport-trpc/preload';
 exposePortReceiver();
 ```
 
-<Aside type="caution">
-This function must be called in the preload script, not in the main process or renderer. It uses `ipcRenderer` and `contextBridge` from Electron, which are only available in the preload context.
-</Aside>
-
-### What Gets Exposed
-
-After calling `exposePortReceiver()`, the renderer has access to:
+Or pass a `defineElectronTRPC()` registry, mirroring the rest of the typed API:
 
 ```typescript
-window.electronTRPCPort.requestPort(channel?: string): void
+// preload.ts
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
+import { electronTRPC } from '../electron/trpc';
+
+exposeElectronTRPC(electronTRPC);
 ```
 
-You do not need to use this directly. `createElectronTRPCClient()` and
-`getPort()` wrap it for you.
+### Channels allowlist
+
+The resolved allowlist restricts which tRPC channels this preload services.
+Ports and requests for channels outside the list are silently ignored. The
+allowlist is derived from `input` as follows:
+
+- A `defineElectronTRPC()` **registry restricts** the preload to exactly its
+  declared channel names (read via `getElectronTRPCChannelNames()`). This is the
+  recommended form: the same source of truth that types your channels also gates
+  the preload.
+- A **non-empty** `{ channels }` string array restricts to those names.
+- An **omitted or empty** `{ channels }` array services **every** channel.
+
+```typescript
+// preload.ts
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
+import { electronTRPC } from '../electron/trpc';
+
+// Allowlist is exactly the registry's declared channels (e.g. 'main', 'worker').
+exposeElectronTRPC(electronTRPC);
+
+// Or restrict explicitly by name:
+exposeElectronTRPC({ channels: ['default', 'worker'] });
+```
+
+<Aside type="caution">
+This function must be called in the preload script, not in the main process or renderer. It relies on Electron APIs that are only available in the preload context.
+</Aside>
 
 ### Security
 
-The function uses `contextBridge.exposeInMainWorld()` only for the request trigger. The actual `MessagePort` is transferred with `window.postMessage()`, so the renderer still receives a real browser `MessagePort`.
+The function uses `contextBridge` to expose only a small request trigger to the
+renderer; the `MessagePort` itself is transferred separately, so the renderer
+receives a real browser `MessagePort` with `contextIsolation` left intact.
