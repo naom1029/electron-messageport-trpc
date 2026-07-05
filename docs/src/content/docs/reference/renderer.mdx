@@ -7,10 +7,68 @@ import { Aside } from '@astrojs/starlight/components';
 
 ```typescript
 import {
+  createElectronTRPCClient,
   portLink,
   getPort,
 } from 'electron-messageport-trpc/renderer';
 ```
+
+## `createElectronTRPCClient<TRouter>(opts?)`
+
+Creates a typed tRPC client for the default renderer-to-main channel.
+
+```typescript
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import type { AppRouter } from '../main/router';
+
+const trpc = createElectronTRPCClient<AppRouter>();
+
+await trpc.ping.query();
+```
+
+Use this form for a single renderer-to-main router.
+
+### Options
+
+```typescript
+interface CreateElectronTRPCSingleClientOptions {
+  transformer?: DataTransformerOptions;
+}
+```
+
+---
+
+## `createElectronTRPCClient(channels, opts?)`
+
+Creates typed tRPC clients for every channel defined by `defineElectronTRPC()`.
+
+```typescript
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import { electronTRPC } from './trpc';
+
+const trpc = createElectronTRPCClient(electronTRPC);
+
+await trpc.main.ping.query();
+await trpc.worker.render.mutate(input);
+```
+
+Use this form when one renderer talks to multiple typed channels, such as main
+and utility-process routers.
+
+### Options
+
+```typescript
+interface CreateElectronTRPCClientOptions<TRegistry> {
+  transformer?: DataTransformerOptions;
+  channels?: Partial<
+    Record<keyof TRegistry, { transformer?: DataTransformerOptions }>
+  >;
+}
+```
+
+Use `channels` when different channel routers need different transformers.
+
+---
 
 ## `portLink(opts)`
 
@@ -20,14 +78,16 @@ Creates a tRPC link that communicates over a MessagePort. Use this as a link in 
 
 ```typescript
 interface PortLinkOptions {
-  port: MessagePort | Promise<MessagePort>;
+  port?: MessagePort | Promise<MessagePort>;
+  channel?: string;
   transformer?: DataTransformerOptions;
 }
 ```
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `port` | `MessagePort \| Promise<MessagePort>` | Yes | The renderer-side MessagePort, or a promise that resolves to one |
+| `port` | `MessagePort \| Promise<MessagePort>` | No | The renderer-side MessagePort, or a promise that resolves to one |
+| `channel` | `string` | No | Channel used when `port` is omitted |
 | `transformer` | `DataTransformerOptions` | No | Data transformer matching the remote router |
 
 ### Returns
@@ -43,43 +103,60 @@ import type { AppRouter } from '../main/router';
 
 const trpc = createTRPCClient<AppRouter>({
   links: [
-    portLink({ port: getPort() }),
+    portLink({ port: getPort({ channel: 'main' }) }),
   ],
 });
 ```
 
 <Aside type="tip">
-Since `portLink` accepts a `Promise<MessagePort>`, you can pass `getPort()` directly. The link will queue outgoing requests until the port resolves, then flush them.
+For the primary API, prefer `createElectronTRPCClient()`. `portLink()` remains available for custom MessagePort wiring.
 </Aside>
-
-### How It Works
-
-1. On first use, the link resolves the port promise and sets up a `message` event listener.
-2. Each request is assigned a unique numeric ID.
-3. Requests are sent as `ClientMessage` objects via `port.postMessage()`.
-4. Responses are matched by ID and dispatched to the appropriate observer.
 
 ---
 
-## `getPort()`
+## `getPort(opts?)`
 
-Returns a `Promise<MessagePort>` that resolves to the port exposed by the preload script.
+Returns a `Promise<MessagePort>` that resolves to the port exposed by the preload
+script. It **never throws synchronously** — all failure modes (missing bridge,
+timeout) come back as a **rejected promise**.
 
 ### Parameters
 
-None.
+```typescript
+interface GetPortOptions {
+  channel?: string;
+  timeoutMs?: number;
+}
+```
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `channel` | `string` | No | Channel name to request. Defaults to `'default'` |
+| `timeoutMs` | `number` | No | How long to wait for the port before rejecting. Defaults to `10000` (10s) |
 
 ### Returns
 
 `Promise<MessagePort>`
 
-### Throws
+### Rejects
 
-Throws an `Error` if `exposePortReceiver()` was not called in the preload script (i.e., `window.electronTRPCPort` is `undefined`).
+The returned promise rejects (it does not throw synchronously) when:
 
-```
-Error: electronTRPCPort not found. Did you call exposePortReceiver() in your preload script?
-```
+- **No bridge** — `exposePortReceiver()` was not called in the preload script
+  (i.e., `window.electronTRPCPort` is `undefined`):
+
+  ```
+  Error: electronTRPCPort not found. Did you call exposePortReceiver() in your preload script?
+  ```
+
+- **Timeout** — no port arrived for the channel within `timeoutMs`:
+
+  ```
+  Error: No port received for channel "worker" within 10000ms; is createElectronTRPCMain wired and is "worker" in the preload allowlist?
+  ```
+
+On rejection the cached promise for that channel is dropped, so a later
+`getPort()` call retries from scratch.
 
 ### Example
 
@@ -87,5 +164,6 @@ Error: electronTRPCPort not found. Did you call exposePortReceiver() in your pre
 import { getPort } from 'electron-messageport-trpc/renderer';
 
 const port = await getPort();
+const workerPort = await getPort({ channel: 'worker', timeoutMs: 5000 });
 // Use the port directly, or pass it to portLink
 ```

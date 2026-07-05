@@ -2,6 +2,11 @@ import type { TRPCLink } from '@trpc/client';
 import { TRPCClientError } from '@trpc/client';
 import type { AnyRouter } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
+import {
+  type AsyncIterableQueue,
+  createAsyncIterableQueue,
+} from '../shared/asyncIterableQueue';
+import { decodeCloneSafe, encodeCloneSafe } from '../shared/cloneSafe';
 import type { ClientMessage, ServerMessage } from '../shared/protocol';
 import { isServerMessage } from '../shared/protocol';
 import { nextRequestId } from '../shared/requestId';
@@ -38,6 +43,10 @@ interface PendingRequest {
   onComplete(): void;
   onStopped(): void;
   type: 'query' | 'mutation' | 'subscription';
+  streaming: boolean;
+  handedOff: boolean;
+  stream?: AsyncIterableQueue<unknown>;
+  abort(): void;
 }
 
 function createAbortError(): Error {
@@ -60,16 +69,18 @@ export function mainPortLink<TRouter extends AnyRouter>(
     let initialized = false;
 
     function handleMessage(event: MainPortMessageEvent): void {
-      if (!isServerMessage(event.data)) {
+      const message = decodeCloneSafe(event.data);
+      if (!isServerMessage(message)) {
         return;
       }
 
-      const msg: ServerMessage = event.data;
+      const msg: ServerMessage = message;
       const req = pending.get(msg.id);
       if (!req) return;
 
       if (msg.kind === 'error') {
         pending.delete(msg.id);
+        req.stream?.error(transformer.output.deserialize(msg.error));
         req.onError(
           TRPCClientError.from({
             error: transformer.output.deserialize(msg.error),
@@ -77,20 +88,39 @@ export function mainPortLink<TRouter extends AnyRouter>(
         );
       } else if (msg.kind === 'result' && msg.type === 'data') {
         const data = transformer.output.deserialize(msg.data);
-        req.onData(
-          msg.eventId
-            ? { type: 'data', id: msg.eventId, data }
-            : { type: 'data', data },
-        );
-        if (req.type !== 'subscription') {
+        if (req.streaming && req.type !== 'subscription') {
+          req.stream?.push(msg.eventId ? { id: msg.eventId, data } : data);
+        } else {
+          req.onData(
+            msg.eventId
+              ? { type: 'data', id: msg.eventId, data }
+              : { type: 'data', data },
+          );
+        }
+        if (req.type !== 'subscription' && !req.streaming) {
           pending.delete(msg.id);
           req.onComplete();
         }
       } else if (msg.kind === 'result' && msg.type === 'started') {
-        req.onStarted();
+        req.streaming = true;
+        if (req.type === 'subscription') {
+          req.onStarted();
+        } else {
+          const stream = createAsyncIterableQueue<unknown>(() => {
+            if (pending.delete(msg.id)) {
+              req.abort();
+            }
+          });
+          req.stream = stream;
+          req.handedOff = true;
+          req.onData({ type: 'data', data: stream.iterable });
+        }
       } else if (msg.kind === 'result' && msg.type === 'stopped') {
         pending.delete(msg.id);
-        req.onStopped();
+        req.stream?.complete();
+        if (req.type === 'subscription') {
+          req.onStopped();
+        }
         req.onComplete();
       }
     }
@@ -163,6 +193,15 @@ export function mainPortLink<TRouter extends AnyRouter>(
 
         pending.set(id, {
           type: op.type,
+          streaming: false,
+          handedOff: false,
+          abort() {
+            sendAbort(
+              op.type === 'subscription'
+                ? 'subscription.stop'
+                : 'request.abort',
+            );
+          },
           onData(data) {
             observer.next({ result: data });
           },
@@ -189,7 +228,7 @@ export function mainPortLink<TRouter extends AnyRouter>(
         });
 
         ensurePort()
-          .then((port) => {
+          .then(async (port) => {
             if (op.signal?.aborted) {
               throw createAbortError();
             }
@@ -200,7 +239,7 @@ export function mainPortLink<TRouter extends AnyRouter>(
               path: op.path,
               input: transformer.input.serialize(op.input),
             };
-            port.postMessage(message);
+            port.postMessage(await encodeCloneSafe(message));
           })
           .catch((error) => {
             cleanupPending();
@@ -208,6 +247,10 @@ export function mainPortLink<TRouter extends AnyRouter>(
           });
 
         return () => {
+          const request = pending.get(id);
+          if (request?.handedOff) {
+            return;
+          }
           if (!cleanupPending()) {
             return;
           }

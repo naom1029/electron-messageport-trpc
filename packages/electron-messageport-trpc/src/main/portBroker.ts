@@ -6,16 +6,30 @@ export interface WebContentsLike {
 }
 
 export interface PortBroker {
-  createRendererPort(webContents: WebContentsLike): {
+  createRendererPort(
+    webContents: WebContentsLike,
+    opts?: CreateRendererPortOptions,
+  ): {
     serverPort: InstanceType<typeof MessageChannelMain>['port1'];
   };
 }
 
+export interface CreateRendererPortOptions {
+  channel?: string;
+}
+
 export function createPortBroker(): PortBroker {
   return {
-    createRendererPort(webContents: WebContentsLike) {
+    createRendererPort(
+      webContents: WebContentsLike,
+      opts: CreateRendererPortOptions = {},
+    ) {
       const { port1, port2 } = new MessageChannelMain();
-      webContents.postMessage(PORT_INIT_CHANNEL, null, [port1]);
+      webContents.postMessage(
+        PORT_INIT_CHANNEL,
+        { channel: opts.channel ?? 'default' },
+        [port1],
+      );
       return { serverPort: port2 };
     },
   };

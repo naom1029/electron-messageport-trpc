@@ -1,59 +1,24 @@
 import path from 'node:path';
-import { createTRPCClient } from '@trpc/client';
-import {
-  app,
-  BrowserWindow,
-  ipcMain,
-  MessageChannelMain,
-  utilityProcess,
-} from 'electron';
-import { mainPortLink } from 'electron-messageport-trpc/main';
-import type { UtilityRouter } from '../utility/router';
+import { app, BrowserWindow, ipcMain, utilityProcess } from 'electron';
+import { createElectronTRPCUtilityClient } from 'electron-messageport-trpc/main';
+import { electronTRPC } from './trpc';
 
-async function waitForUtilityReady(
-  child: Electron.UtilityProcess,
-): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const handleMessage = (message: unknown) => {
-      if (
-        typeof message === 'object' &&
-        message !== null &&
-        'type' in message &&
-        message.type === 'ready'
-      ) {
-        child.off('message', handleMessage);
-        child.off('exit', handleExit);
-        resolve();
-      }
-    };
-
-    const handleExit = (code: number) => {
-      child.off('message', handleMessage);
-      child.off('exit', handleExit);
-      reject(new Error(`Utility process exited before ready: ${code}`));
-    };
-
-    child.on('message', handleMessage);
-    child.on('exit', handleExit);
-  });
-}
-
-async function createUtilityClient() {
+function createUtilityClient() {
   const child = utilityProcess.fork(path.join(__dirname, 'worker.js'));
-  const { port1, port2 } = new MessageChannelMain();
 
-  await waitForUtilityReady(child);
-  child.postMessage({ type: 'connect' }, [port1]);
-
-  const client = createTRPCClient<UtilityRouter>({
-    links: [mainPortLink({ port: port2 })],
+  // The library waits for the utility's 'ready' signal before posting connect
+  // and auto-closes the kept port when the utility exits, so no hand-written
+  // ready handshake is needed here.
+  const { client, destroy } = createElectronTRPCUtilityClient({
+    channel: electronTRPC.worker,
+    utility: child,
   });
 
-  return { child, client, port: port2 };
+  return { child, client, destroy };
 }
 
 async function createWindow() {
-  const utility = await createUtilityClient();
+  const utility = createUtilityClient();
   const win = new BrowserWindow({
     width: 860,
     height: 720,
@@ -90,7 +55,7 @@ async function createWindow() {
     heartbeat.unsubscribe();
     ipcMain.removeHandler('main-utility:get-greeting');
     ipcMain.removeHandler('main-utility:generate-report');
-    utility.port.close();
+    utility.destroy();
     utility.child.kill();
   });
 

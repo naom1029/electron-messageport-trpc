@@ -38,10 +38,15 @@ code runs:
 
 | Import path | Process | Purpose |
 |---|---|---|
-| `electron-messageport-trpc/main` | Main | Port broker and request handler |
-| `electron-messageport-trpc/preload` | Preload | Expose port receiver to renderer |
-| `electron-messageport-trpc/renderer` | Renderer | tRPC link and port getter |
-| `electron-messageport-trpc/utility` | Utility | Attach a tRPC handler to `parentPort` in a utility process |
+| `electron-messageport-trpc/main` | Main | `createElectronTRPCMain()` to serve a router to your windows |
+| `electron-messageport-trpc/preload` | Preload | `exposeElectronTRPC()` to bridge ports into the renderer |
+| `electron-messageport-trpc/renderer` | Renderer | `createElectronTRPCClient<AppRouter>()` for type-safe calls |
+| `electron-messageport-trpc/utility` | Utility | `createElectronTRPCUtility()` to serve a router from a utility process |
+| `electron-messageport-trpc` | Any (process-agnostic) | `defineElectronTRPC()` and registry types for multi-channel / multi-utility topologies |
+
+<Aside type="tip">
+The simple renderer-to-main path only needs `/main`, `/preload`, and `/renderer` — no registry. Reach for the package root (`defineElectronTRPC()`) only when you have multiple typed channels or utility processes to wire up.
+</Aside>
 
 <Aside type="caution">
 Make sure your bundler configuration resolves these package paths correctly. If you use Electron Forge or electron-vite, the default configuration should work out of the box.

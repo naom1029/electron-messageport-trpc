@@ -8,7 +8,7 @@ import { Aside } from '@astrojs/starlight/components';
 This package uses an internal MessagePort protocol between its client links and
 server handlers. The message shape is private implementation detail, not a
 public API. Use `portLink()`, `mainPortLink()`, `createPortHandler()`, or
-`createWindowMessagePortHandler()` instead of posting protocol messages
+the higher-level typed registry helpers instead of posting protocol messages
 manually.
 
 <Aside type="note">
@@ -22,16 +22,9 @@ electron-messageport-trpc traffic. Do not mix application-defined
 Request inputs, response data, and error shapes are sent through
 `MessagePort.postMessage()`.
 
-When a tRPC data transformer is configured, values are transformed before they
-are posted to the port and transformed back after they are received:
-
-- client input: `transformer.input.serialize()`
-- server input: `transformer.input.deserialize()`
-- server result and error shapes: `transformer.output.serialize()`
-- client result and error shapes: `transformer.output.deserialize()`
-
-This mirrors the data-transformer behavior users expect from tRPC links, while
-still using MessagePort as the underlying transport.
+A configured tRPC transformer is applied before sending and reversed on receipt,
+matching standard tRPC link behavior. Configure the same transformer on both
+ends.
 
 ## Structured Clone
 
@@ -44,12 +37,13 @@ transport.
 
 ## Binary Data
 
-`Uint8Array` and `ArrayBuffer` are supported by the MessagePort transport.
+`Uint8Array`, `ArrayBuffer`, typed arrays, and other Structured Clone values use
+the platform MessagePort transport directly.
 
-`Blob` is not currently supported as a MessagePort payload in this package.
-Electron renderer-to-main MessagePort transfer can deliver Blob-containing
-messages as `null` without throwing from `postMessage()`. Use `ArrayBuffer` or
-`Uint8Array` for binary payloads.
+`Blob` values are encoded by this package before `postMessage()` and restored on
+the receiving side. This avoids Electron renderer-to-main MessagePort behavior
+where Blob-containing messages can arrive as `null` without throwing from
+`postMessage()`.
 
 ## Compatibility Notes
 

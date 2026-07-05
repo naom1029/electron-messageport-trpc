@@ -16,13 +16,67 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
+## Looks Like This
+
+Wire a renderer to your main-process tRPC router in three calls — no registry, no boilerplate:
+
+```ts
+// electron/main.ts
+import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
+import { appRouter } from './router';
+
+createElectronTRPCMain({ router: appRouter, windows: [win] });
+```
+
+```ts
+// preload/index.ts
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
+
+exposeElectronTRPC();
+```
+
+```ts
+// src/trpc.ts
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import type { AppRouter } from '../electron/router';
+
+export const trpc = createElectronTRPCClient<AppRouter>();
+
+// then call your router directly:
+const { message } = await trpc.greet.query({ name: 'World' });
+trpc.timeTick.subscribe(undefined, { onData: (data) => console.log(data.time) });
+```
+
+Each renderer gets its own `MessagePort` to main — a direct, per-port transport rather than funneling every
+call through a single shared IPC channel. That same transport spans main↔utility and renderer↔utility too.
+
 ## What It Gives You
 
 <CardGrid>
-  <Card title="tRPC v11 Over MessagePort" icon="approve-check">
-    Use queries, mutations, subscriptions, inference, middleware, and errors across Electron processes.
+  <Card title="Start Simple: Renderer ↔ Main" icon="approve-check">
+    The three calls above are all you need. Queries, mutations, subscriptions, inference, middleware, and
+    errors flow over MessagePort with no registry to define.
   </Card>
-  <Card title="Flexible Electron Topologies" icon="random">
-    Call utility-process routers from main, or broker renderer-to-utility ports while main stays out of the request path.
+  <Card title="Scale Up: Typed Channels & Utility Processes" icon="random">
+    When you grow into multiple routers or utility processes, opt into `defineElectronTRPC()` for a typed
+    channel registry — call a utility router from main, or broker renderer↔utility ports while main stays
+    out of the request path.
   </Card>
 </CardGrid>
+
+When you need that second tier, declare your channels once and namespace clients by channel:
+
+```ts
+// shared/trpc.ts
+import { channel, defineElectronTRPC } from 'electron-messageport-trpc';
+import type { AppRouter } from '../electron/router';
+import type { WorkerRouter } from '../utility/router';
+
+// Contract-first: the object is the single source of truth. Channel names and
+// router types are both inferred from it — no separate type argument.
+export const electronTRPC = defineElectronTRPC({
+  main: channel<AppRouter>(),
+  worker: channel<WorkerRouter>(),
+});
+// renderer: const trpc = createElectronTRPCClient(electronTRPC).worker;
+```

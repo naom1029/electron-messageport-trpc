@@ -11,6 +11,26 @@ It is for Electron apps that already want the tRPC model -- routers,
 procedures, inference, middleware, and subscriptions -- across process
 boundaries, backed by MessagePort connections between Electron processes.
 
+<Aside title="The simple case">
+For the common renderer-to-main app, you wire up three helpers and call your
+router with flat, typed calls -- no channel protocol, no registry:
+
+```ts
+// main process -- electron-messageport-trpc/main
+createElectronTRPCMain({ router: appRouter, windows: [win] });
+
+// preload script -- electron-messageport-trpc/preload
+exposeElectronTRPC();
+
+// renderer -- electron-messageport-trpc/renderer
+const trpc = createElectronTRPCClient<AppRouter>();
+const { message } = await trpc.greet.query({ name }); // and trpc.timeTick.subscribe(...)
+```
+
+The registry API (`defineElectronTRPC`) is only for the advanced cases below --
+multiple typed channels or utility processes. Start here and reach for it later.
+</Aside>
+
 ## What This Library Adds
 
 Electron gives you IPC primitives. tRPC gives you typed routers and clients.
@@ -21,6 +41,20 @@ protocol for every procedure.
 |---|---|
 | tRPC v11 over MessagePort | Queries, mutations, subscriptions, inference, middleware, and errors across Electron processes |
 | Utility processes | Main-to-utility and renderer-to-utility topologies |
+| Transformer / superjson support | Plug in a tRPC transformer (e.g. superjson) to send Dates, Maps, and other rich types -- configured to match on both ends |
+| Async-iterable streaming | Stream values from a procedure by returning an async iterable, in addition to classic subscriptions |
+| Blob encoding | Blobs are encoded at the transport level so binary payloads cross the port intact |
+
+## Why MessagePort (vs electron-trpc)
+
+[electron-trpc](https://github.com/jsonnull/electron-trpc) routes every
+call through the main process over Electron IPC. This library uses MessagePort
+instead, which gives you a per-port direct transport:
+
+- Transferable ports let a renderer talk to a **utility process without main in
+  the request path** -- main only brokers the initial port handoff.
+- A single transport spans every topology: renderer-to-main, main-to-utility,
+  and renderer-to-utility.
 
 ## Supported Topologies
 
@@ -33,37 +67,11 @@ protocol for every procedure.
 
 ## How It Works
 
-The library uses Electron's `MessageChannelMain` to establish direct MessagePort connections between processes. A lightweight message protocol carries tRPC requests and responses over these ports.
-
-```
-Renderer                Main Process
-  |                         |
-  |  MessagePort (port1)    |
-  |<========================>|
-  |  tRPC requests/results  |
-  |                         |
-```
-
-1. The **main process** creates a `MessageChannelMain` and sends one port to the renderer via `webContents.postMessage`.
-2. The **preload script** receives the port and exposes it to the renderer via `contextBridge`.
-3. The **renderer** uses the port as a tRPC link, so `query`, `mutation`, and
-   `subscription` procedures use the same typed client API as the rest of your
-   tRPC code.
-
-## Architecture Overview
-
-```
-┌─────────────┐   MessagePort   ┌──────────────┐
-│  Renderer   │<===============>│  Main Process │
-└─────────────┘                 └──────┬───────┘
-                                       │ MessagePort
-                                       │
-                               ┌───────┴────────┐
-                               │ Utility Process │
-                               └─────────────────┘
-```
-
-In advanced topologies, the main process can also hand a port off to a utility process so the main thread stays out of the request path.
+The three helpers (`createElectronTRPCMain` in main, `exposeElectronTRPC` in
+preload, `createElectronTRPCClient` in the renderer) establish a direct, typed
+MessagePort link per renderer -- you never wire the port by hand, and your
+`query`, `mutation`, and `subscription` calls use the same typed tRPC client API
+as the rest of your code.
 
 ## Next Steps
 

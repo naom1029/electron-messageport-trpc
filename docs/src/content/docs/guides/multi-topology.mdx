@@ -3,53 +3,158 @@ title: Utility Process Topologies
 description: Utility process communication patterns
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 Electron's [utility process](https://www.electronjs.org/docs/latest/api/utility-process) runs in a separate child process. You can connect it via MessagePort for offloading heavy computation.
+
+<Aside type="note" title="Do you need a registry?">
+A simple renderer-to-main setup needs **no registry** at all — start with the [Quick Start](/getting-started/quick-start/), which uses `createElectronTRPCMain` / `exposeElectronTRPC` / `createElectronTRPCClient` directly. Reach for `defineElectronTRPC` only when you have **multiple typed channels** or **utility processes** to connect, as on this page.
+</Aside>
+
+## Channel Contract
+
+Declare the topology **contract-first**: `defineElectronTRPC()` takes a runtime
+object mapping each channel name to a [`channel<Router>()`](/reference/core/#channeltrouter)
+phantom token and infers the registry from it. The object is the single source of
+truth — channel names and router types both come from it, with no separate type
+argument. Import `channel` and `defineElectronTRPC` from the package root.
+
+```typescript
+// electron/trpc.ts
+import { channel, defineElectronTRPC } from 'electron-messageport-trpc';
+import type { UtilityRouter } from '../utility/router';
+
+export const electronTRPC = defineElectronTRPC({
+  worker: channel<UtilityRouter>(),
+});
+```
+
+<Aside type="caution">
+Always pass the type argument: write `channel<UtilityRouter>()`, not a bare
+`channel()`. TypeScript cannot make the type parameter mandatory, so an omitted
+argument silently degrades that one channel to `ElectronTRPCChannel<{}>` and you
+lose inference for it.
+</Aside>
 
 ## Utility Worker
 
+The library now owns the ready handshake automatically — there is no manual
+readiness step to write in your worker. Just call `createElectronTRPCUtility`.
+
 ```typescript
 // utility-process.ts (runs in a utility process)
-import { createParentPortHandler } from 'electron-messageport-trpc/utility';
+import { createElectronTRPCUtility } from 'electron-messageport-trpc/utility';
+import { electronTRPC } from '../electron/trpc';
 import { utilityRouter } from './router';
 
-createParentPortHandler({
+createElectronTRPCUtility({
+  channel: electronTRPC.worker,
   router: utilityRouter,
   parentPort: process.parentPort,
 });
 ```
 
+`createElectronTRPCUtility` also accepts a `createContext` factory and a `transformer`. If you pass a `transformer`, the **same** transformer must be configured on the client side (`createElectronTRPCUtilityClient` / the bridge), or messages will fail to decode.
+
 ## Main to Utility
+
+`createElectronTRPCUtilityClient` waits for the worker's automatic `ready` signal
+internally before posting `connect`, so you fork the worker and create the client
+directly — no manual handshake. It returns `{ client, destroy }`; call `destroy()`
+to close the kept port and detach its listeners (it also tears down automatically
+when the utility exits).
 
 ```typescript
 // main process
-import { createTRPCClient } from '@trpc/client';
-import { MessageChannelMain, utilityProcess } from 'electron';
-import { mainPortLink } from 'electron-messageport-trpc/main';
+import { utilityProcess } from 'electron';
+import { createElectronTRPCUtilityClient } from 'electron-messageport-trpc/main';
+import { electronTRPC } from './trpc';
 
-const child = utilityProcess.fork('utility-process.js');
-const { port1, port2 } = new MessageChannelMain();
+const child = utilityProcess.fork('worker.js');
 
-child.postMessage({ type: 'connect' }, [port1]);
-
-const client = createTRPCClient({
-  links: [mainPortLink({ port: port2 })],
+const { client, destroy } = createElectronTRPCUtilityClient({
+  channel: electronTRPC.worker,
+  utility: child,
 });
+
+await client.greet.query({ name: 'Ada' });
+
+// On teardown:
+destroy();
+child.kill();
 ```
+
+### Pooling multiple workers
+
+When you fork several identical workers, `createElectronTRPCUtilityPool` builds one client per named instance. Each instance uses the same ready-wait machinery, so you fork and construct the pool directly.
+
+```typescript
+import { utilityProcess } from 'electron';
+import { createElectronTRPCUtilityPool } from 'electron-messageport-trpc/main';
+import { electronTRPC } from './trpc';
+
+const primary = utilityProcess.fork('worker.js');
+const secondary = utilityProcess.fork('worker.js');
+
+const pool = createElectronTRPCUtilityPool({
+  channel: electronTRPC.worker,
+  utilities: { primary, secondary },
+});
+
+await pool.get('primary').greet.query({ name: 'Ada' });
+
+// On teardown, destroy every instance at once:
+pool.destroy();
+```
+
+`createElectronTRPCUtilityPool` accepts the same `transformer` option, applied to every client in the pool.
 
 ## Renderer to Utility
 
+Here the main process only brokers a MessagePort pair; the renderer then talks directly to the utility over tRPC. This wires up three processes.
+
+**Main process broker** — fork the worker and create the bridge; the bridge waits for the worker's automatic `ready` signal before brokering the port:
+
 ```typescript
 // main process broker
-import { createPortBroker } from 'electron-messageport-trpc/main';
 import { utilityProcess } from 'electron';
+import { createElectronTRPCRendererUtilityBridge } from 'electron-messageport-trpc/main';
+import { electronTRPC } from './trpc';
 
-const child = utilityProcess.fork('utility-process.js');
-const broker = createPortBroker();
+const child = utilityProcess.fork('worker.js');
 
-win.webContents.on('did-finish-load', () => {
-  const { serverPort } = broker.createRendererPort(win.webContents);
-  child.postMessage({ type: 'connect' }, [serverPort]);
+const bridge = createElectronTRPCRendererUtilityBridge({
+  window: win,
+  channel: electronTRPC.worker,
+  utility: child,
 });
+
+win.on('closed', () => {
+  bridge.destroy();
+  child.kill();
+});
+```
+
+**Preload** — expose the registry so the renderer can request the port. Passing the registry also **restricts** the renderer to exactly the registry's declared channels:
+
+```typescript
+// preload
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
+import { electronTRPC } from './trpc';
+
+exposeElectronTRPC(electronTRPC);
+```
+
+**Renderer** — create a channel-namespaced client and call the worker directly:
+
+```typescript
+// renderer
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import { electronTRPC } from './trpc';
+
+export const trpc = createElectronTRPCClient(electronTRPC).worker;
+
+// e.g. await trpc.greet.query({ name });
 ```
 
 This keeps the main process out of the request path. It only creates and transfers the port pair.
@@ -66,6 +171,6 @@ Renderer <== MessagePort brokered by Main ==> Utility Process
 
 | Topology | Use Case | Pros | Cons |
 |---|---|---|---|
-| Renderer to Main | Standard RPC, DB access, native APIs | Simple setup | Main process is the bottleneck |
+| Renderer to Main (no-registry baseline — see [Quick Start](/getting-started/quick-start/)) | Standard RPC, DB access, native APIs | Simple setup, no registry | Main process is the bottleneck |
 | Main to Utility | Heavy computation, background tasks | Offloads main thread | Extra process overhead |
 | Renderer to Utility | Direct offloading via broker | Keeps main out of the request path | Most complex setup |

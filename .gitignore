@@ -5,3 +5,6 @@ examples/*/dist-electron
 coverage
 .turbo
 *.tsbuildinfo
+todo.md
+todo.md
+design-api.md

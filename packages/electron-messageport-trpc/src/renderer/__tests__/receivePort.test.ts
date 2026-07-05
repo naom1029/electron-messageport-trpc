@@ -105,12 +105,96 @@ describe('getPort', () => {
     port2.close();
   });
 
-  it('throws when the preload bridge is unavailable', async () => {
+  it('keeps port promises separate by channel', async () => {
+    const windowMock = createWindowWithBridge();
+    vi.stubGlobal('window', windowMock);
+    const { getPort } = await loadReceivePortModule();
+    const { port1: mainPort, port2: mainPeer } = new MessageChannel();
+    const { port1: utilityPort, port2: utilityPeer } = new MessageChannel();
+
+    const mainPromise = getPort({ channel: 'main' });
+    const utilityPromise = getPort({ channel: 'utility' });
+
+    windowMock.dispatchEvent(
+      new MessageEvent('message', {
+        data: { channel: PORT_INIT_CHANNEL, trpcChannel: 'utility' },
+        ports: [utilityPort],
+      }),
+    );
+    windowMock.dispatchEvent(
+      new MessageEvent('message', {
+        data: { channel: PORT_INIT_CHANNEL, trpcChannel: 'main' },
+        ports: [mainPort],
+      }),
+    );
+
+    await expect(mainPromise).resolves.toBe(mainPort);
+    await expect(utilityPromise).resolves.toBe(utilityPort);
+    expect(windowMock.electronTRPCPort.requestPort).toHaveBeenCalledWith(
+      'main',
+    );
+    expect(windowMock.electronTRPCPort.requestPort).toHaveBeenCalledWith(
+      'utility',
+    );
+
+    mainPort.close();
+    mainPeer.close();
+    utilityPort.close();
+    utilityPeer.close();
+  });
+
+  it('rejects when the preload bridge is unavailable', async () => {
     vi.stubGlobal('window', new EventTarget());
     const { getPort } = await loadReceivePortModule();
 
-    const act = () => getPort();
+    const portPromise = getPort();
 
-    expect(act).toThrow('electronTRPCPort not found');
+    await expect(portPromise).rejects.toThrow('electronTRPCPort not found');
+  });
+
+  it('rejects after the timeout elapses with an actionable message naming the channel', async () => {
+    vi.useFakeTimers();
+    const windowMock = createWindowWithBridge();
+    vi.stubGlobal('window', windowMock);
+    const { getPort } = await loadReceivePortModule();
+
+    const portPromise = getPort({ channel: 'worker', timeoutMs: 5000 });
+    const assertion = expect(portPromise).rejects.toThrow(
+      'No port received for channel "worker" within 5000ms',
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    await assertion;
+
+    vi.useRealTimers();
+  });
+
+  it('drops the cached promise on rejection so a later getPort retries', async () => {
+    vi.useFakeTimers();
+    const windowMock = createWindowWithBridge();
+    vi.stubGlobal('window', windowMock);
+    const { getPort } = await loadReceivePortModule();
+    const { port1, port2 } = new MessageChannel();
+
+    const firstPromise = getPort({ channel: 'main', timeoutMs: 1000 });
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(firstPromise).rejects.toThrow('No port received');
+
+    // Act: a fresh request must NOT return the rejected cached promise.
+    const secondPromise = getPort({ channel: 'main', timeoutMs: 1000 });
+    windowMock.dispatchEvent(
+      new MessageEvent('message', {
+        data: { channel: PORT_INIT_CHANNEL, trpcChannel: 'main' },
+        ports: [port1],
+      }),
+    );
+
+    // Assert
+    expect(secondPromise).not.toBe(firstPromise);
+    await expect(secondPromise).resolves.toBe(port1);
+    expect(windowMock.electronTRPCPort.requestPort).toHaveBeenCalledTimes(2);
+
+    vi.useRealTimers();
+    port1.close();
+    port2.close();
   });
 });

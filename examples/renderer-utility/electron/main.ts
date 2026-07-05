@@ -1,40 +1,10 @@
 import path from 'node:path';
 import { app, BrowserWindow, utilityProcess } from 'electron';
-import { createPortBroker } from 'electron-messageport-trpc/main';
-
-const broker = createPortBroker();
-
-async function waitForUtilityReady(
-  child: Electron.UtilityProcess,
-): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const handleMessage = (message: unknown) => {
-      if (
-        typeof message === 'object' &&
-        message !== null &&
-        'type' in message &&
-        message.type === 'ready'
-      ) {
-        child.off('message', handleMessage);
-        child.off('exit', handleExit);
-        resolve();
-      }
-    };
-
-    const handleExit = (code: number) => {
-      child.off('message', handleMessage);
-      child.off('exit', handleExit);
-      reject(new Error(`Utility process exited before ready: ${code}`));
-    };
-
-    child.on('message', handleMessage);
-    child.on('exit', handleExit);
-  });
-}
+import { createElectronTRPCRendererUtilityBridge } from 'electron-messageport-trpc/main';
+import { electronTRPC } from './trpc';
 
 async function createWindow() {
   const child = utilityProcess.fork(path.join(__dirname, 'worker.js'));
-  await waitForUtilityReady(child);
   const win = new BrowserWindow({
     width: 860,
     height: 720,
@@ -45,12 +15,14 @@ async function createWindow() {
     },
   });
 
-  win.webContents.on('did-finish-load', () => {
-    const { serverPort } = broker.createRendererPort(win.webContents);
-    child.postMessage({ type: 'connect' }, [serverPort]);
+  const bridge = createElectronTRPCRendererUtilityBridge({
+    window: win,
+    channel: electronTRPC.worker,
+    utility: child,
   });
 
   win.on('closed', () => {
+    bridge.destroy();
     child.kill();
   });
 

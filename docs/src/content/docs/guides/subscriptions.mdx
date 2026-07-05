@@ -5,8 +5,8 @@ description: Use tRPC subscription procedures over Electron MessagePort
 
 import { Aside } from '@astrojs/starlight/components';
 
-Subscription procedures work over the same `portLink()` and `mainPortLink()`
-transport as queries and mutations.
+Subscription procedures work over the same typed MessagePort channels as
+queries and mutations.
 
 ## Defining a Subscription
 
@@ -23,7 +23,9 @@ export const appRouter = t.router({
     .subscription(async function* ({ input, signal }) {
       let count = 0;
       while (!signal.aborted) {
-        yield { count: count++, timestamp: new Date() };
+        // No transformer is configured on `initTRPC.create()`, so values must
+        // be JSON-serializable. Emit an ISO string instead of a `Date` object.
+        yield { count: count++, timestamp: new Date().toISOString() };
         await new Promise((resolve) => setTimeout(resolve, input.intervalMs));
       }
     }),
@@ -37,14 +39,16 @@ The `signal` parameter is an `AbortSignal` that is triggered when the client uns
 ## Subscribing from the Renderer
 
 ```typescript
-// src/renderer/index.ts
-import { createTRPCClient } from '@trpc/client';
-import { portLink, getPort } from 'electron-messageport-trpc/renderer';
+// src/renderer/trpc.ts
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
 import type { AppRouter } from '../main/router';
 
-const trpc = createTRPCClient<AppRouter>({
-  links: [portLink({ port: getPort() })],
-});
+export const trpc = createElectronTRPCClient<AppRouter>();
+```
+
+```typescript
+// src/renderer/index.ts
+import { trpc } from './trpc';
 
 const subscription = trpc.onTimer.subscribe(
   { intervalMs: 1000 },
@@ -53,7 +57,7 @@ const subscription = trpc.onTimer.subscribe(
       console.log('Subscription started');
     },
     onData(value) {
-      // value is typed as { count: number; timestamp: Date }
+      // value is typed as { count: number; timestamp: string }
       console.log(`Tick #${value.count} at ${value.timestamp}`);
     },
     onError(err) {
@@ -71,22 +75,18 @@ const subscription = trpc.onTimer.subscribe(
 subscription.unsubscribe();
 ```
 
-## How It Works Under the Hood
-
-1. The client sends a `{ kind: 'request', method: 'subscription', ... }` message.
-2. The server calls the procedure and receives an async iterable.
-3. The server sends `{ kind: 'result', type: 'started' }`.
-4. For each yielded value, the server sends `{ kind: 'result', type: 'data', data }`.
-5. When the client calls `unsubscribe()`, it sends `{ kind: 'subscription.stop', id }`.
-6. The server aborts the `AbortController`, which signals the async generator to stop.
-7. If the iterable completes naturally, the server sends `{ kind: 'result', type: 'stopped' }`.
+<Aside type="note" title="Using multiple typed channels?">
+The client above is the default flat shape: `createElectronTRPCClient<AppRouter>()` with calls like `trpc.onTimer.subscribe(...)`. If you run several routers across channels (for example a main router plus a utility worker), build the client from a `defineElectronTRPC()` registry and namespace by channel: `createElectronTRPCClient(electronTRPC).worker.heartbeats.subscribe(...)`. See the [multi-topology guide](/guides/multi-topology/) for the full setup.
+</Aside>
 
 ## Error Handling
 
-If the subscription procedure throws an error, the server sends a `{ kind: 'error' }` message with the tRPC error shape. The client's `onError` callback receives a `TRPCClientError` instance.
+If the subscription procedure throws an error, the client's `onError` callback receives a `TRPCClientError` instance.
 
 ## Lifecycle and Cleanup
 
-- **Client unsubscribes**: sends `subscription.stop`, server aborts the `AbortController`
-- **Port closes**: the server's `close` event handler aborts all active subscriptions
-- **`destroy()` called**: same as port close -- all subscriptions are aborted and the port is closed
+The server's async generator keeps running until the client unsubscribes or the channel closes. To stop early or release resources, check `signal.aborted` in your loop and exit when it becomes `true`.
+
+- **Client unsubscribes**: calling `unsubscribe()` stops the subscription; the server's `signal` is aborted so the generator can clean up.
+- **Port closes**: all active subscriptions on that channel stop and their signals are aborted.
+- **`destroy()` called**: behaves like a port close -- all subscriptions stop and the channel is closed.

@@ -1,3 +1,3 @@
-import { exposePortReceiver } from 'electron-messageport-trpc/preload';
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
 
-exposePortReceiver();
+exposeElectronTRPC();

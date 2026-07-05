@@ -4,8 +4,46 @@ description: API reference for electron-messageport-trpc/utility
 ---
 
 ```typescript
-import { createParentPortHandler } from 'electron-messageport-trpc/utility';
+import {
+  createElectronTRPCUtility,
+  createParentPortHandler,
+} from 'electron-messageport-trpc/utility';
 ```
+
+## `createElectronTRPCUtility(opts)`
+
+Connects a utility process router to a typed registry channel.
+
+```typescript
+import { createElectronTRPCUtility } from 'electron-messageport-trpc/utility';
+import { electronTRPC } from './trpc';
+import { workerRouter } from './router';
+
+createElectronTRPCUtility({
+  channel: electronTRPC.worker,
+  router: workerRouter,
+  parentPort: process.parentPort,
+});
+```
+
+The `router` must match the router type registered for the selected channel, and
+the handler only serves the selected channel.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `channel` | `ElectronTRPCChannel` | Yes | The registry channel this utility serves (e.g. `electronTRPC.worker`) |
+| `router` | `RouterForChannel<TChannel>` | Yes | The tRPC router for that channel |
+| `parentPort` | `ParentPortLike` | Yes | The utility process parent port (`process.parentPort`) |
+| `createContext` | `() => MaybePromise<unknown>` | No | Per-request context factory |
+| `transformer` | `DataTransformerOptions` | No | Overrides the router's configured data transformer; must match the client end |
+
+### Returns
+
+A `ParentPortHandler` with `handlers` and `destroy()`.
+
+---
 
 ## `createParentPortHandler(opts)`
 
@@ -16,8 +54,9 @@ Attaches a tRPC request handler to the utility process's `parentPort`. This allo
 ```typescript
 interface CreateParentPortHandlerOptions<TRouter extends AnyRouter> {
   router: TRouter;
-  parentPort: ParentPort;
-  createContext?: () => Promise<unknown>;
+  parentPort: ParentPortLike;
+  channel?: string;
+  createContext?: () => MaybePromise<unknown>;
   transformer?: DataTransformerOptions;
 }
 ```
@@ -25,13 +64,15 @@ interface CreateParentPortHandlerOptions<TRouter extends AnyRouter> {
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `router` | `AnyRouter` | Yes | Your tRPC router instance |
-| `parentPort` | `ParentPort` | Yes | The utility process parent port from `electron` |
-| `createContext` | `() => Promise<unknown>` | No | Factory function called for every request |
+| `parentPort` | `ParentPortLike` | Yes | The utility process parent port. `ParentPortLike` is a structural type (not Electron's `ParentPort`); `process.parentPort` is assignable to it |
+| `channel` | `string` | No | Only handle ports sent for this channel |
+| `createContext` | `() => MaybePromise<unknown>` | No | Factory function called for every request. May return synchronously or return a promise |
 | `transformer` | `DataTransformerOptions` | No | Overrides the router's configured data transformer |
 
 ### Returns
 
-A `{ handlers: PortHandler[] }` object. Each transferred port creates one handler.
+A `ParentPortHandler` object with `handlers` and `destroy()`. Each transferred
+port creates one child `PortHandler`.
 
 ### Example
 

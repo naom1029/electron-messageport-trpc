@@ -5,6 +5,7 @@ import {
   getTRPCErrorFromUnknown,
   isTrackedEnvelope,
 } from '@trpc/server';
+import { decodeCloneSafe, encodeCloneSafe } from '../shared/cloneSafe';
 import type {
   ClientMessage,
   ServerMessage,
@@ -42,6 +43,18 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   return isObject(value) && Symbol.asyncIterator in value;
 }
 
+function isTrackedEnvelopeLike(
+  value: unknown,
+): value is [string, unknown, symbol] {
+  return (
+    isTrackedEnvelope(value) ||
+    (Array.isArray(value) &&
+      value.length === 3 &&
+      typeof value[0] === 'string' &&
+      typeof value[2] === 'symbol')
+  );
+}
+
 function inputWithLastEventId(input: unknown, lastEventId: string | undefined) {
   if (lastEventId === undefined) {
     return input;
@@ -64,8 +77,8 @@ export function createPortHandler<TRouter extends AnyRouter>(
   const requests = new Map<number, AbortController>();
   let destroyed = false;
 
-  function send(msg: ServerMessage): void {
-    port.postMessage(msg);
+  async function send(msg: ServerMessage): Promise<void> {
+    port.postMessage(await encodeCloneSafe(msg));
   }
 
   function sendError(
@@ -85,6 +98,10 @@ export function createPortHandler<TRouter extends AnyRouter>(
       ctx: undefined,
     });
 
+    // Fire-and-forget: the port may already be closed, in which case
+    // `send` rejects (postMessage throws). Swallow that rejection here so it
+    // does not surface as an unhandled promise rejection. Awaited `send`
+    // callers keep their own error-propagation semantics.
     send({
       kind: 'error',
       id,
@@ -93,7 +110,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
         message: shape.message,
         data: shape.data,
       }),
-    });
+    }).catch(() => {});
   }
 
   async function iterateSubscription(
@@ -107,9 +124,9 @@ export function createPortHandler<TRouter extends AnyRouter>(
     try {
       for await (const value of iterable) {
         if (signal.aborted) break;
-        if (isTrackedEnvelope(value)) {
+        if (isTrackedEnvelopeLike(value)) {
           const [eventId, data] = value;
-          send({
+          await send({
             kind: 'result',
             id,
             type: 'data',
@@ -117,7 +134,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
             data: transformer.output.serialize({ id: eventId, data }),
           });
         } else {
-          send({
+          await send({
             kind: 'result',
             id,
             type: 'data',
@@ -126,7 +143,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
         }
       }
       if (!signal.aborted) {
-        send({ kind: 'result', id, type: 'stopped' });
+        await send({ kind: 'result', id, type: 'stopped' });
       }
     } catch (cause) {
       if (!signal.aborted) {
@@ -140,11 +157,12 @@ export function createPortHandler<TRouter extends AnyRouter>(
   async function handleRequest(msg: TRPCPortRequest): Promise<void> {
     const { id, method, path } = msg;
     const input = inputWithLastEventId(
-      transformer.input.deserialize(msg.input),
+      transformer.input.deserialize(decodeCloneSafe(msg.input)),
       msg.lastEventId,
     );
     const ac = new AbortController();
     requests.set(id, ac);
+    let streaming = false;
 
     try {
       const ctx = (await opts.createContext?.()) ?? {};
@@ -163,8 +181,9 @@ export function createPortHandler<TRouter extends AnyRouter>(
         return;
       }
 
-      if (method === 'subscription' && isAsyncIterable(result)) {
-        send({ kind: 'result', id, type: 'started' });
+      if (isAsyncIterable(result)) {
+        streaming = true;
+        await send({ kind: 'result', id, type: 'started' });
         iterateSubscription(id, result, ac.signal, method, path, input);
         return;
       }
@@ -173,7 +192,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
         throw new Error('Subscription procedure must return an async iterable');
       }
 
-      send({
+      await send({
         kind: 'result',
         id,
         type: 'data',
@@ -184,7 +203,7 @@ export function createPortHandler<TRouter extends AnyRouter>(
         sendError(id, cause, method, path, input);
       }
     } finally {
-      if (method !== 'subscription') {
+      if (method !== 'subscription' && !streaming) {
         requests.delete(id);
       }
     }

@@ -7,9 +7,10 @@
 MessagePort transport for tRPC v11 in Electron.
 
 `electron-messageport-trpc` lets Electron renderers, the main process, and
-utility processes talk through normal tRPC clients and routers. It keeps the
-tRPC programming model while using MessagePort connections that can be handed
-to different Electron processes.
+utility processes talk through normal tRPC clients and routers. You write
+ordinary tRPC routers and clients; the library gives the renderer a typed
+client backed by a direct MessagePort link to your router. Preload exposes the
+link with one call, so there is no manual port wiring to manage.
 
 ## Features
 
@@ -42,38 +43,41 @@ pnpm add @trpc/server @trpc/client
 ### Main Process
 
 ```typescript
-import { createWindowMessagePortHandler } from 'electron-messageport-trpc/main';
+import { createElectronTRPCMain } from 'electron-messageport-trpc/main';
 import { appRouter } from './router';
 
 const win = new BrowserWindow({ /* ... */ });
-createWindowMessagePortHandler({ router: appRouter, windows: [win] });
+createElectronTRPCMain({
+  router: appRouter,
+  windows: [win],
+});
 ```
 
 ### Preload
 
 ```typescript
-import { exposePortReceiver } from 'electron-messageport-trpc/preload';
-exposePortReceiver();
+import { exposeElectronTRPC } from 'electron-messageport-trpc/preload';
+
+exposeElectronTRPC();
 ```
 
 ### Renderer
 
 ```typescript
-import { createTRPCClient } from '@trpc/client';
-import { portLink } from 'electron-messageport-trpc/renderer';
-import { getPort } from 'electron-messageport-trpc/renderer';
+import { createElectronTRPCClient } from 'electron-messageport-trpc/renderer';
+import type { AppRouter } from './router';
 
-const client = createTRPCClient<AppRouter>({
-  links: [portLink({ port: getPort() })],
-});
+const client = createElectronTRPCClient<AppRouter>();
 
-const result = await client.greeting.query({ name: 'World' });
+const result = await client.greet.query({ name: 'World' });
 ```
+
+For multiple typed channels or utility processes, see the [multi-topology guide](https://naom1029.github.io/electron-messageport-trpc/guides/multi-topology/).
 
 ### Subscriptions
 
 ```typescript
-client.events.subscribe(undefined, {
+client.timeTick.subscribe(undefined, {
   onData(data) {
     console.log('Received:', data);
   },
