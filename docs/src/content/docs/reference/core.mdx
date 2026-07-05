@@ -3,33 +3,190 @@ title: Core API
 description: API reference for electron-messageport-trpc
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 ```typescript
-import { defineElectronTRPC } from 'electron-messageport-trpc';
+import { channel, defineElectronTRPC } from 'electron-messageport-trpc';
 ```
 
-## `defineElectronTRPC<TRegistry>()`
+The registry is needed **only** for multiple typed channels or multi-utility
+topologies. A single renderer-to-main router does not need it: use the
+no-registry overloads
+([`createElectronTRPCMain({ router })`](/reference/main/),
+[`exposeElectronTRPC()`](/reference/preload/), and
+[`createElectronTRPCClient<AppRouter>()`](/reference/renderer/)) instead.
+
+## `defineElectronTRPC(channels)`
 
 Defines the typed channel contract shared by main, preload, renderer, and
-utility code.
+utility code. It accepts a **runtime object** mapping each channel name to a
+[`channel<Router>()`](#channeltrouter) phantom token, and **infers** the registry
+from that object — there is no separate type parameter and no name/type
+duplication.
 
 ```typescript
-import { defineElectronTRPC } from 'electron-messageport-trpc';
+import { channel, defineElectronTRPC } from 'electron-messageport-trpc';
 import type { AppRouter } from './main-router';
 import type { WorkerRouter } from './worker-router';
 
-export const electronTRPC = defineElectronTRPC<{
-  main: AppRouter;
-  worker: WorkerRouter;
-}>();
+export const electronTRPC = defineElectronTRPC({
+  main: channel<AppRouter>(),
+  worker: channel<WorkerRouter>(),
+});
 ```
 
-The registry key is the runtime channel name. The registry value is the tRPC
-router type behind that channel.
+This is the single source of truth for the topology. The object's **keys** are
+the runtime channel names; each key's `channel<Router>()` token carries that
+channel's router **type** (erased at runtime).
 
 ```typescript
 await client.main.ping.query();
 await client.worker.render.mutate(input);
 ```
 
-This keeps channel names and router types coupled. A utility channel cannot be
-accidentally used as the main-process router type.
+The returned registry is consumed across every process: pass it to
+[`exposeElectronTRPC()`](/reference/preload/) in preload, to
+[`createElectronTRPCClient()`](/reference/renderer/) (then namespace by channel,
+e.g. `.worker`) in the renderer, to
+[`createElectronTRPCMain()`](/reference/main/) in the main process, and a single
+channel (e.g. `electronTRPC.worker`) to
+[`createElectronTRPCUtility()`](/reference/utility/) in a utility process.
+
+### Properties
+
+- **Full inference** — the registry comes entirely from the object you pass; you
+  never restate channel names or router types as a type argument.
+- **Completeness by construction** — the runtime channel names are exactly the
+  keys of the object you defined. They cannot drift from, or be under-listed
+  relative to, the type-level registry.
+- **Typo safety** — reading an undeclared channel is both a **type error** and a
+  **runtime throw**:
+
+  ```typescript
+  electronTRPC.workr;
+  // Type error, and at runtime:
+  // Error: Unknown electron-messageport-trpc channel "workr". Declared: main, worker
+  ```
+
+- **Preload safety** — the object holds only phantom tokens. Router types are
+  type-only, so importing the registry into preload erases them; no server
+  router runtime is pulled into the preload bundle.
+
+### Runtime channel names
+
+The declared names are stored on the registry and can be read back with
+[`getElectronTRPCChannelNames()`](#getelectrontrpcchannelnamesregistry):
+
+```typescript
+getElectronTRPCChannelNames(electronTRPC); // ['main', 'worker']
+```
+
+<Aside type="caution" title="`channel()` requires its type argument">
+Always write `channel<MyRouter>()`. TypeScript cannot make a type parameter
+mandatory, so a bare `channel()` silently degrades to `ElectronTRPCChannel<{}>`
+(the empty object type — not `unknown`/`any`), weakening type safety for that one
+channel. A required runtime router argument is intentionally **not** used because
+it would pull server router code into the preload bundle. This is the same
+tradeoff as ts-rest's `c.type<T>()`.
+</Aside>
+
+## `channel<TRouter>()`
+
+Phantom token used as the value in the [`defineElectronTRPC()`](#defineelectrontrpcchannels)
+input map. Carries no server runtime — `TRouter` is type-only — so importing it
+into preload is type-erased and safe. Returns a small branded marker object.
+
+```typescript
+import { channel } from 'electron-messageport-trpc';
+import type { WorkerRouter } from './worker-router';
+
+const workerToken = channel<WorkerRouter>();
+// workerToken: ElectronTRPCChannel<WorkerRouter>
+```
+
+The type argument is **required** — see the caution above.
+
+## Types
+
+```typescript
+import type {
+  ElectronTRPCChannels,
+  ElectronTRPCChannel,
+  ElectronTRPCRegistry,
+  RouterForChannel,
+} from 'electron-messageport-trpc';
+import {
+  isElectronTRPCChannels,
+  getElectronTRPCChannelNames,
+} from 'electron-messageport-trpc';
+```
+
+### `ElectronTRPCChannels<TRegistry>`
+
+The return type of [`defineElectronTRPC()`](#defineelectrontrpcchannels). Maps
+each registry key to an [`ElectronTRPCChannel`](#electrontrpcchanneltrouter)
+carrying that key's router type.
+
+```typescript
+const electronTRPC = defineElectronTRPC({
+  main: channel<AppRouter>(),
+  worker: channel<WorkerRouter>(),
+});
+// electronTRPC: ElectronTRPCChannels<{ main: AppRouter; worker: WorkerRouter }>
+// electronTRPC.worker: ElectronTRPCChannel<WorkerRouter>
+```
+
+### `ElectronTRPCChannel<TRouter>`
+
+A single typed channel. Its runtime shape is just `{ name: string }` (the
+channel key); the router type is tracked at the type level only. This is the
+value you pass to per-channel APIs such as
+[`createElectronTRPCUtility({ channel })`](/reference/utility/), and the value
+[`channel<TRouter>()`](#channeltrouter) returns.
+
+```typescript
+interface ElectronTRPCChannel<TRouter extends AnyRouter = AnyRouter> {
+  readonly name: string;
+}
+```
+
+### `ElectronTRPCRegistry`
+
+The router-map type behind the registry: a `Record<string, AnyRouter>` mapping
+channel names to router types. It is the constraint that
+`ElectronTRPCChannels<TRegistry>` is parameterized over.
+
+```typescript
+type ElectronTRPCRegistry = Record<string, AnyRouter>;
+```
+
+### `RouterForChannel<TChannel>`
+
+Extracts the router type from an `ElectronTRPCChannel`. Useful when writing
+generic helpers over a channel.
+
+```typescript
+type WorkerRouter = RouterForChannel<typeof electronTRPC.worker>;
+```
+
+### `isElectronTRPCChannels(value)`
+
+Runtime type guard that returns `true` when `value` is a registry created by
+`defineElectronTRPC()`. The preload/main APIs use it internally to tell a
+registry apart from a plain options object.
+
+```typescript
+if (isElectronTRPCChannels(value)) {
+  // value is ElectronTRPCChannels<ElectronTRPCRegistry>
+}
+```
+
+### `getElectronTRPCChannelNames(registry)`
+
+Returns the declared channel names of a `defineElectronTRPC()` registry as a
+`string[]` (a copy of the stored names). Preload uses this to derive its
+allowlist.
+
+```typescript
+getElectronTRPCChannelNames(electronTRPC); // ['main', 'worker']
+```

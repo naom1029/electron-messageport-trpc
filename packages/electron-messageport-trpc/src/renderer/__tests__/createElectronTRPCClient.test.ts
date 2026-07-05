@@ -1,6 +1,10 @@
 import { initTRPC } from '@trpc/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { defineElectronTRPC, isElectronTRPCChannels } from '../../core/index';
+import {
+  channel,
+  defineElectronTRPC,
+  isElectronTRPCChannels,
+} from '../../core/index';
 import { createPortHandler } from '../../main/createPortHandler';
 import { createBridgedPair } from '../../shared/__tests__/mockBridge';
 import { PORT_INIT_CHANNEL } from '../../shared/constants';
@@ -59,9 +63,9 @@ describe('createElectronTRPCClient', () => {
 
   it('treats registries without a main key as multi-channel clients', () => {
     // Arrange
-    const channels = defineElectronTRPC<{
-      worker: WorkerRouter;
-    }>();
+    const channels = defineElectronTRPC({
+      worker: channel<WorkerRouter>(),
+    });
     vi.stubGlobal('window', {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),

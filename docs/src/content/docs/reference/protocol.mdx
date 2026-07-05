@@ -22,16 +22,9 @@ electron-messageport-trpc traffic. Do not mix application-defined
 Request inputs, response data, and error shapes are sent through
 `MessagePort.postMessage()`.
 
-When a tRPC data transformer is configured, values are transformed before they
-are posted to the port and transformed back after they are received:
-
-- client input: `transformer.input.serialize()`
-- server input: `transformer.input.deserialize()`
-- server result and error shapes: `transformer.output.serialize()`
-- client result and error shapes: `transformer.output.deserialize()`
-
-This mirrors the data-transformer behavior users expect from tRPC links, while
-still using MessagePort as the underlying transport.
+A configured tRPC transformer is applied before sending and reversed on receipt,
+matching standard tRPC link behavior. Configure the same transformer on both
+ends.
 
 ## Structured Clone
 

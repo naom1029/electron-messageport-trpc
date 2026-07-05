@@ -5,19 +5,16 @@ export type {
 export { createPortHandler } from './createPortHandler';
 export type {
   BrowserWindowLike,
-  CreateWindowMessagePortHandlerOptions,
-  RendererWebContentsLike,
-  WindowMessagePortHandler,
-} from './createWindowMessagePortHandler';
-export { createWindowMessagePortHandler } from './createWindowMessagePortHandler';
-export type {
   CreateElectronTRPCMainOptions,
   CreateElectronTRPCMainSingleOptions,
   CreateElectronTRPCRendererUtilityBridgeOptions,
   CreateElectronTRPCUtilityClientOptions,
   CreateElectronTRPCUtilityPoolOptions,
+  ElectronTRPCDestroyable,
   ElectronTRPCMainHandler,
+  ElectronTRPCUtilityClient,
   ElectronTRPCUtilityPool,
+  RendererWebContentsLike,
   UtilityProcessLike,
 } from './electronTRPC';
 export {

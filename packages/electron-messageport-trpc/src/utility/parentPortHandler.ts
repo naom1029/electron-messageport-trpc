@@ -10,6 +10,7 @@ export interface ParentPortLike {
     event: 'message',
     listener: (event: { data: unknown; ports: MessagePortLike[] }) => void,
   ): void;
+  postMessage(message: unknown): void;
 }
 
 export interface CreateParentPortHandlerOptions<TRouter extends AnyRouter> {
@@ -53,8 +54,29 @@ export function createParentPortHandler<TRouter extends AnyRouter>(
         transformer,
       });
       handlers.push(handler);
+
+      // Remove the handler when its port closes so dead handlers do not
+      // accumulate across renderer reloads / repeated connects. The
+      // destroyed guard plus the indexOf check ensure we never double-destroy:
+      // once destroy() ran, or once spliced out, a later close is a no-op.
+      port.on('close', () => {
+        if (destroyed) {
+          return;
+        }
+        const index = handlers.indexOf(handler);
+        if (index === -1) {
+          return;
+        }
+        handlers.splice(index, 1);
+        handler.destroy();
+      });
     }
   });
+
+  // The 'message' listener is now live: signal readiness to the parent so it
+  // can post the connect message + port. This is emitted exactly once here so
+  // consumers no longer hand-write process.parentPort.postMessage({type:'ready'}).
+  parentPort.postMessage({ type: 'ready' });
 
   return {
     handlers,
@@ -63,7 +85,9 @@ export function createParentPortHandler<TRouter extends AnyRouter>(
         return;
       }
       destroyed = true;
-      for (const handler of handlers) {
+      // Iterate a snapshot so a synchronous 'close' during destroy() cannot
+      // splice the array mid-loop and skip handlers.
+      for (const handler of [...handlers]) {
         handler.destroy();
       }
       handlers.length = 0;

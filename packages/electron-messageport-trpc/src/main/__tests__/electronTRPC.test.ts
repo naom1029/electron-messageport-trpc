@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { createTRPCClient } from '@trpc/client';
 import { initTRPC } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
-import { defineElectronTRPC } from '../../core/index';
+import { channel, defineElectronTRPC } from '../../core/index';
 import { MockMessagePortMain } from '../../shared/__tests__/mockPort';
 import { createPortHandler } from '../createPortHandler';
 import {
@@ -29,14 +29,19 @@ vi.mock('electron', () => ({
 class MockWebContents extends EventEmitter {
   readonly postMessage = vi.fn();
   isLoadingMainFrame = vi.fn(() => true);
+  getURL = vi.fn(() => '');
 }
 
 class MockBrowserWindow extends EventEmitter {
   readonly webContents = new MockWebContents();
 }
 
-class MockUtilityProcess {
+class MockUtilityProcess extends EventEmitter {
   readonly postMessage = vi.fn();
+
+  signalReady() {
+    this.emit('message', { type: 'ready' });
+  }
 }
 
 const t = initTRPC.create();
@@ -52,10 +57,10 @@ const workerRouter = t.router({
 type AppRouter = typeof appRouter;
 type WorkerRouter = typeof workerRouter;
 
-const channels = defineElectronTRPC<{
-  main: AppRouter;
-  worker: WorkerRouter;
-}>();
+const channels = defineElectronTRPC({
+  main: channel<AppRouter>(),
+  worker: channel<WorkerRouter>(),
+});
 
 function getTransferredPort(window: MockBrowserWindow, index: number) {
   return window.webContents.postMessage.mock.calls[index][2][0] as
@@ -141,10 +146,12 @@ describe('electronTRPC main API', () => {
   it('creates a typed main-to-utility client over MessageChannelMain', async () => {
     // Arrange
     const utility = new MockUtilityProcess();
-    const client = createElectronTRPCUtilityClient({
+    const { client } = createElectronTRPCUtilityClient({
       channel: channels.worker,
       utility,
     });
+
+    utility.signalReady();
 
     const transferredPort = utility.postMessage.mock.calls[0][1][0] as
       | MockMessagePortMain
@@ -181,6 +188,7 @@ describe('electronTRPC main API', () => {
     });
 
     for (const utility of [utilityA, utilityB]) {
+      utility.signalReady();
       const transferredPort = utility.postMessage.mock.calls[0][1][0] as
         | MockMessagePortMain
         | undefined;
@@ -202,6 +210,164 @@ describe('electronTRPC main API', () => {
     );
   });
 
+  it('connects immediately when the window has already finished loading', () => {
+    // Arrange - not loading AND a document is already loaded (non-empty URL).
+    const window = new MockBrowserWindow();
+    window.webContents.isLoadingMainFrame = vi.fn(() => false);
+    window.webContents.getURL = vi.fn(() => 'app://index.html');
+
+    // Act
+    createElectronTRPCMain({
+      channels,
+      windows: [window],
+      routers: { main: appRouter, worker: workerRouter },
+    });
+
+    // Assert
+    expect(window.webContents.postMessage).toHaveBeenCalledTimes(2);
+    expect(window.webContents.postMessage.mock.calls[0][1]).toEqual({
+      channel: 'main',
+    });
+  });
+
+  it('does NOT connect immediately for a fresh, never-loaded window (waits for did-finish-load)', () => {
+    // Arrange - a brand-new window reports isLoadingMainFrame() === false but has
+    // an empty URL; connecting now would race the upcoming did-finish-load and
+    // hand the renderer a port whose server handler is then torn down.
+    const window = new MockBrowserWindow();
+    window.webContents.isLoadingMainFrame = vi.fn(() => false);
+    window.webContents.getURL = vi.fn(() => '');
+
+    // Act
+    createElectronTRPCMain({
+      channels,
+      windows: [window],
+      routers: { main: appRouter, worker: workerRouter },
+    });
+
+    // Assert - no premature delivery; the single delivery happens on load.
+    expect(window.webContents.postMessage).not.toHaveBeenCalled();
+
+    window.webContents.emit('did-finish-load');
+
+    expect(window.webContents.postMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('wires a window added after construction via addWindow', () => {
+    // Arrange
+    const initialWindow = new MockBrowserWindow();
+    const handler = createElectronTRPCMain({
+      windows: [initialWindow],
+      router: appRouter,
+    });
+    const lateWindow = new MockBrowserWindow();
+
+    // Act
+    handler.addWindow(lateWindow);
+    lateWindow.webContents.emit('did-finish-load');
+
+    // Assert
+    expect(lateWindow.webContents.postMessage).toHaveBeenCalledTimes(1);
+    expect(lateWindow.webContents.postMessage.mock.calls[0][1]).toEqual({
+      channel: 'default',
+    });
+  });
+
+  it('stops servicing a window after removeWindow tears it down', () => {
+    // Arrange
+    const window = new MockBrowserWindow();
+    const handler = createElectronTRPCMain({
+      windows: [window],
+      router: appRouter,
+    });
+
+    // Act
+    handler.removeWindow(window);
+    window.webContents.emit('did-finish-load');
+
+    // Assert
+    expect(window.webContents.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not post connect to a utility before its ready signal', () => {
+    // Arrange
+    const utility = new MockUtilityProcess();
+
+    // Act
+    createElectronTRPCUtilityClient({
+      channel: channels.worker,
+      utility,
+    });
+
+    // Assert
+    expect(utility.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('closes the kept main port when the utility client is destroyed', async () => {
+    // Arrange
+    const utility = new MockUtilityProcess();
+    const { destroy } = createElectronTRPCUtilityClient({
+      channel: channels.worker,
+      utility,
+    });
+    utility.signalReady();
+    const transferredPort = utility.postMessage.mock.calls[0][1][0] as
+      | MockMessagePortMain
+      | undefined;
+    if (!transferredPort) {
+      throw new Error('Expected transferred utility port');
+    }
+    // The kept MainPortLike is port2; closing it emits 'close' on its peer
+    // (the transferred port1), which is the observable lifecycle effect.
+    const closed = new Promise<void>((resolve) => {
+      transferredPort.on('close', () => resolve());
+    });
+
+    // Act
+    destroy();
+
+    // Assert: destroy removes the message/exit listeners and closes the port.
+    expect(utility.listenerCount('message')).toBe(0);
+    expect(utility.listenerCount('exit')).toBe(0);
+    await expect(closed).resolves.toBeUndefined();
+  });
+
+  it('auto-destroys the utility client when the utility exits', () => {
+    // Arrange
+    const utility = new MockUtilityProcess();
+    createElectronTRPCUtilityClient({
+      channel: channels.worker,
+      utility,
+    });
+
+    // Act
+    utility.emit('exit');
+
+    // Assert
+    expect(utility.listenerCount('message')).toBe(0);
+    expect(utility.listenerCount('exit')).toBe(0);
+  });
+
+  it('destroys every pooled utility instance via pool.destroy()', () => {
+    // Arrange
+    const utilityA = new MockUtilityProcess();
+    const utilityB = new MockUtilityProcess();
+    const pool = createElectronTRPCUtilityPool({
+      channel: channels.worker,
+      utilities: { a: utilityA, b: utilityB },
+    });
+
+    // Act
+    pool.destroy();
+
+    // Assert
+    for (const utility of [utilityA, utilityB]) {
+      expect(utility.listenerCount('message')).toBe(0);
+      expect(utility.listenerCount('exit')).toBe(0);
+    }
+    expect(() => pool.get('a')).toThrow('Unknown utility instance: a');
+  });
+
   it('brokers a renderer port to a utility process for renderer-to-utility', () => {
     // Arrange
     const window = new MockBrowserWindow();
@@ -216,10 +382,15 @@ describe('electronTRPC main API', () => {
     // Act
     window.webContents.emit('did-finish-load');
 
-    // Assert
+    // Assert - the renderer port is posted immediately, but the utility connect
+    // is buffered until the utility signals readiness (handshake parity).
     expect(window.webContents.postMessage.mock.calls[0][1]).toEqual({
       channel: 'worker',
     });
+    expect(utility.postMessage).not.toHaveBeenCalled();
+
+    utility.signalReady();
+
     expect(utility.postMessage.mock.calls[0][0]).toEqual({
       type: 'connect',
       channel: 'worker',

@@ -7,9 +7,10 @@
 MessagePort transport for tRPC v11 in Electron.
 
 `electron-messageport-trpc` lets Electron renderers, the main process, and
-utility processes talk through normal tRPC clients and routers. It keeps the
-tRPC programming model while using MessagePort connections that can be handed
-to different Electron processes.
+utility processes talk through normal tRPC clients and routers. You write
+ordinary tRPC routers and clients; the library gives the renderer a typed
+client backed by a direct MessagePort link to your router. Preload exposes the
+link with one call, so there is no manual port wiring to manage.
 
 ## Features
 
@@ -68,13 +69,15 @@ import type { AppRouter } from './router';
 
 const client = createElectronTRPCClient<AppRouter>();
 
-const result = await client.greeting.query({ name: 'World' });
+const result = await client.greet.query({ name: 'World' });
 ```
+
+For multiple typed channels or utility processes, see the [multi-topology guide](https://naom1029.github.io/electron-messageport-trpc/guides/multi-topology/).
 
 ### Subscriptions
 
 ```typescript
-client.events.subscribe(undefined, {
+client.timeTick.subscribe(undefined, {
   onData(data) {
     console.log('Received:', data);
   },
